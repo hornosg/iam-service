@@ -42,7 +42,11 @@ WORKDIR /app
 
 # Copiar el binario compilado desde el stage anterior
 COPY --from=builder /app/main .
-COPY --from=builder /app/src/infrastructure/persistence/migrations ./migrations
+
+# Copiar todas las migraciones disponibles
+COPY --from=builder /app/migrations ./migrations
+COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /app/src/tenant/infrastructure/persistence/migrations ./migrations/tenant
 
 # Asignar permisos adecuados
 RUN chmod +x /app/main && \

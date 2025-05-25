@@ -1,2 +1,0 @@
-DROP TABLE IF EXISTS plans;
-DROP TYPE IF EXISTS saas_type;
