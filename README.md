@@ -1,63 +1,73 @@
-# Multi-Tenants IAM
+# saas-mt-iam-service
 
+Este proyecto fue extraído del monorepo SaaS Marketplace como parte de la migración a repositorios independientes.
 
-## build app
+## Descripción
+
+Servicio iam del ecosistema SaaS Marketplace.
+
+## Tecnología
+
+- **Tipo**: go
+- **Lenguaje**: Go
+- **Framework**: Gin/Fiber
+- **Base de datos**: PostgreSQL
+
+## Desarrollo
+
+### Prerrequisitos
+
+- Go 1.21+
+- PostgreSQL 15+
+- Docker (opcional)
+
+### Instalación
+
 ```bash
-go build -o iam src/main.go
+# Clonar el repositorio
+git clone https://github.com/trinityweb/saas-mt-iam-service.git
+cd saas-mt-iam-service
+
+# Instalar dependencias
+go mod download
+
+# Ejecutar
+go run main.go
 ```
 
-## build image
+### Docker
+
 ```bash
-docker-compose build --no-cache api
+# Construir imagen
+docker build -t saas-mt-iam-service .
+
+# Ejecutar contenedor
+docker run -p 8080:8080 saas-mt-iam-service
 ```
 
+## Configuración
 
-## Ejecutar Migraciones Manualmente
+Copia `.env.example` a `.env` y configura las variables necesarias.
 
-Si prefieres ejecutar las migraciones manualmente en lugar de usar el contenedor de migraciones, puedes seguir estos pasos:
+## Documentación
 
-1. Asegúrate de que el contenedor de PostgreSQL esté corriendo:
-```bash
-docker compose up postgres -d
-```
+- [Documentación de API](./api-docs/)
+- [Documentación técnica](./documentation/)
 
-2. Ejecuta cada migración en orden usando los siguientes comandos:
-```bash
-# Crear tabla de planes
-docker exec -i iam-db psql -U postgres -d multi_tenants_iam < src/infrastructure/persistence/migrations/000001_create_plans_table.up.sql
+## Migración desde Monorepo
 
-# Crear tabla de roles
-docker exec -i iam-db psql -U postgres -d multi_tenants_iam < src/infrastructure/persistence/migrations/000002_create_roles_table.up.sql
+Este proyecto fue extraído del monorepo original manteniendo todo su historial de git.
 
-# Crear tabla de tenants
-docker exec -i iam-db psql -U postgres -d multi_tenants_iam < src/infrastructure/persistence/migrations/000003_create_tenants_table.up.sql
+**Repositorio original**: https://github.com/trinityweb/saas-marketplace.git
 
-# Crear tabla de usuarios
-docker exec -i iam-db psql -U postgres -d multi_tenants_iam < src/infrastructure/persistence/migrations/000004_create_users_table.up.sql
+## Contribución
 
-# Agregar tipo saas_type
-docker exec -i iam-db psql -U postgres -d multi_tenants_iam < src/infrastructure/persistence/migrations/000005_add_all_saas_type.up.sql
+1. Fork el proyecto
+2. Crea una rama para tu feature
+3. Commit tus cambios
+4. Push a la rama
+5. Abre un Pull Request
 
-# Agregar soporte de autenticación
-docker exec -i iam-db psql -U postgres -d multi_tenants_iam < src/infrastructure/persistence/migrations/000006_add_auth_support.up.sql
-```
+## Licencia
 
-Para revertir las migraciones, ejecuta los scripts down en orden inverso:
-```bash
-# Eliminar soporte de autenticación
-docker exec -i iam-db psql -U postgres -d multi_tenants_iam < src/infrastructure/persistence/migrations/000006_add_auth_support.down.sql
-
-# Eliminar tipo saas_type
-docker exec -i iam-db psql -U postgres -d multi_tenants_iam < src/infrastructure/persistence/migrations/000005_add_all_saas_type.down.sql
-
-# Eliminar tabla de usuarios
-docker exec -i iam-db psql -U postgres -d multi_tenants_iam < src/infrastructure/persistence/migrations/000004_create_users_table.down.sql
-
-# Eliminar tabla de tenants
-docker exec -i iam-db psql -U postgres -d multi_tenants_iam < src/infrastructure/persistence/migrations/000003_create_tenants_table.down.sql
-
-# Eliminar tabla de roles
-docker exec -i iam-db psql -U postgres -d multi_tenants_iam < src/infrastructure/persistence/migrations/000002_create_roles_table.down.sql
-
-# Eliminar tabla de planes
-docker exec -i iam-db psql -U postgres -d multi_tenants_iam < src/infrastructure/persistence/migrations/000001_create_plans_table.down.sql
+[Licencia del proyecto]
