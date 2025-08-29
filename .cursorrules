@@ -1,0 +1,382 @@
+# Reglas de Cursor para IAM Service
+
+## Contexto del Proyecto
+Servicio de Identity & Access Management (IAM) del sistema SaaS multi-tenant "Tienda Vecina". Es el núcleo de autenticación y autorización, manejando usuarios, tenants, roles, permisos y planes de suscripción.
+
+**Puerto de servicio**: 8080 (acceso vía Kong Gateway en 8001)
+
+## Descripción del Servicio
+- **Autenticación**: JWT + OAuth2 (Google)
+- **Multi-tenancy**: Gestión de organizaciones/empresas
+- **Autorización**: Roles y permisos por tenant
+- **Suscripciones**: Planes con features configurables
+- **Seguridad**: Validación automática y audit trail
+
+## Comandos de Desarrollo
+
+### Local
+```bash
+go run src/main.go       # Ejecutar servicio (puerto 8080)
+go test -v -cover ./test/...              # Tests con cobertura
+go test ./test/user/application/usecase/  # Test módulo específico
+```
+
+### Docker (Recomendado)
+```bash
+# Desde directorio raíz del proyecto
+make dev-start          # Inicia todos los servicios backend
+make dev-logs           # Ver logs del servicio IAM
+make dev-restart        # Reiniciar servicios
+```
+
+## REGLA: USAR MCP GO GENERATOR PRIMERO
+
+**SIEMPRE** antes de implementar código Go, consultar MCP:
+
+```bash
+# Analizar workflow IAM
+analyzeUsecaseWorkflow --service_name="iam" --entity_name="user"
+analyzeUsecaseWorkflow --service_name="iam" --entity_name="tenant"
+
+# Generar roadmap
+generateWorkflowRoadmap --service_name="iam"
+
+# Generar componentes
+generateComponentByStep --step_type="usecase" --entity_name="role"
+generateComponentByStep --step_type="dto" --entity_name="plan"
+```
+
+## Arquitectura Hexagonal Modular
+
+### Estructura de Servicios
+```
+src/
+├── main.go              # Punto de entrada
+├── shared/              # Código compartido
+├── api/                 # Configuración API común
+├── auth/                # Módulo autenticación
+├── user/                # Módulo usuarios
+├── tenant/              # Módulo tenants
+├── role/                # Módulo roles
+└── plan/                # Módulo planes
+```
+
+### Patrón por Módulo (Arquitectura Hexagonal)
+```
+módulo/
+├── domain/
+│   ├── entity/         # Entidades de dominio
+│   ├── valueobject/    # Value objects
+│   ├── exception/      # Excepciones dominio
+│   └── port/           # Interfaces (puertos)
+├── application/
+│   ├── usecase/        # Casos de uso
+│   ├── dto/            # DTOs request/response
+│   └── mapper/         # Mappers DTO ↔ Domain
+└── infrastructure/
+    ├── http/           # Controladores REST
+    ├── persistence/    # Repositorios PostgreSQL
+    └── config/         # Configuración módulo
+```
+
+## API Endpoints
+
+**Base URL**: `http://localhost:8080/api/v1`
+
+### Autenticación (`/auth`)
+```http
+POST   /auth/login      # Login email/password o Google OAuth
+POST   /auth/refresh    # Refrescar access token
+GET    /auth/validate   # Validar token activo
+POST   /auth/logout     # Cerrar sesión
+```
+
+### Usuarios (`/users`)
+```http
+POST   /users           # Crear usuario
+GET    /users/:id       # Obtener usuario
+PUT    /users/:id       # Actualizar usuario  
+DELETE /users/:id       # Eliminar usuario
+GET    /users           # Listar usuarios (paginado)
+```
+
+### Tenants (`/tenants`)
+```http
+POST   /tenants                  # Crear tenant
+GET    /tenants/:id              # Obtener tenant
+GET    /tenants/by-slug/:slug    # Obtener por slug
+PUT    /tenants/:id              # Actualizar tenant
+DELETE /tenants/:id              # Eliminar tenant
+GET    /tenants                  # Listar tenants
+POST   /tenants/:id/plan         # Asignar plan
+GET    /tenants/:id/features     # Obtener features
+PUT    /tenants/:id/features     # Actualizar features
+```
+
+### Roles (`/roles`)
+```http
+POST   /roles           # Crear rol
+GET    /roles/:id       # Obtener rol
+PUT    /roles/:id       # Actualizar rol
+DELETE /roles/:id       # Eliminar rol
+GET    /roles           # Listar roles
+```
+
+### Planes (`/plans`)
+```http
+POST   /plans           # Crear plan (admin)
+GET    /plans/:id       # Obtener plan
+GET    /plans           # Listar planes (público)
+```
+
+## Headers Requeridos
+
+### Para Autenticación
+```http
+Authorization: Bearer <jwt_token>
+```
+
+### Para Multi-tenancy
+```http
+X-Tenant-ID: <tenant_uuid>
+```
+
+### Content Type
+```http
+Content-Type: application/json
+```
+
+## Patrones de Respuesta
+
+### Listado con Paginación
+```json
+{
+  "items": [...],
+  "total_count": 100,
+  "page": 1,
+  "page_size": 10,
+  "total_pages": 10
+}
+```
+
+### Parámetros Query Standard
+```
+?page=1&page_size=10&sort_by=created_at&sort_dir=desc
+```
+
+## Testing
+
+### Estructura de Tests
+```
+test/
+├── user/               # Tests módulo user
+├── tenant/             # Tests módulo tenant
+├── auth/               # Tests módulo auth
+├── role/               # Tests módulo role
+├── plan/               # Tests módulo plan
+└── shared/             # Utilidades test
+```
+
+### Patrón Object Mother
+```go
+// test/user/domain/user_mother.go
+func UserMother() *entity.User {
+    return UserMotherWithTenant(uuid.New())
+}
+
+func UserMotherWithTenant(tenantID uuid.UUID) *entity.User {
+    return &entity.User{
+        ID:       uuid.New(),
+        TenantID: tenantID,
+        Email:    "test@example.com",
+        // ... más campos
+    }
+}
+```
+
+### Ejecutar Tests
+```bash
+go test ./test/...              # Todos los tests
+go test ./test/user/...         # Tests módulo user
+go test -v ./test/auth/application/usecase/  # Específico verbose
+```
+
+## Base de Datos
+
+### Esquema Principal (PostgreSQL)
+- **users**: Usuarios del sistema
+- **tenants**: Organizaciones/empresas
+- **roles**: Roles de usuario
+- **plans**: Planes de suscripción
+- **user_roles**: Relación usuario-rol
+- **tenant_plans**: Relación tenant-plan
+- **plan_features**: Features por plan
+
+### Migraciones
+- Se ejecutan automáticamente al iniciar
+- Archivos en directorio `migrations/`
+- Evolutivas, nunca destructivas
+
+## Configuración
+
+### Variables de Entorno
+```bash
+# Base de datos
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=postgres
+DB_PASSWORD=postgres
+DB_NAME=iam_db
+DB_SSLMODE=disable
+
+# Servidor
+PORT=8080
+
+# JWT
+JWT_SECRET=your-secret-key
+JWT_ACCESS_TOKEN_DURATION=15m
+JWT_REFRESH_TOKEN_DURATION=7d
+
+# Métricas
+PROMETHEUS_ENABLED=true
+```
+
+## Multi-Tenancy
+
+### Aislamiento de Datos
+- Todos los recursos filtrados por `tenant_id`
+- Middleware valida header `X-Tenant-ID`
+- Repositorios incluyen tenant_id automáticamente
+- Queries incluyen `WHERE tenant_id = $1`
+
+### Flujo de Autenticación
+1. Login con email/password
+2. Selección de tenant (si usuario multi-tenant)
+3. Token JWT contiene `user_id`, `tenant_id`, `roles`
+4. Todas las requests incluyen tenant_id
+5. Validación automática en middlewares
+
+## Seguridad
+
+### JWT Tokens
+- **Access tokens**: 15 minutos (renovables)
+- **Refresh tokens**: 7 días
+- **Claims**: user_id, tenant_id, roles, features
+- **Algoritmo**: HS256
+
+### Passwords
+- Hash con bcrypt (cost: 10)
+- Validación de fortaleza
+- Rotación opcional
+
+### OAuth2
+- Soporte Google OAuth
+- Registro automático de usuarios
+- Vinculación con tenants existentes
+
+## Casos de Uso Pattern
+
+### Estructura Standard
+```go
+type CreateUserUseCase struct {
+    userRepo     port.UserRepositoryPort
+    roleRepo     port.RoleRepositoryPort
+    eventBus     port.EventBusPort
+}
+
+func (uc *CreateUserUseCase) Execute(ctx context.Context, req dto.CreateUserRequest) (*dto.CreateUserResponse, error) {
+    // 1. Validar entrada
+    // 2. Crear entidad de dominio
+    // 3. Aplicar reglas de negocio
+    // 4. Persistir en repositorio
+    // 5. Publicar eventos
+    // 6. Retornar response
+}
+```
+
+## Monitoreo y Observabilidad
+
+### Health Check
+```bash
+curl http://localhost:8080/health
+```
+
+### Métricas Prometheus
+```bash
+curl http://localhost:8080/metrics
+```
+
+### Logs Estructurados
+- Formato JSON con timestamp
+- Niveles: INFO, WARN, ERROR
+- Incluyen: method, path, status, duration, tenant_id
+- Request ID para trazabilidad
+
+## Convenciones de Desarrollo
+
+### Manejo de Errores
+- Excepciones específicas de dominio
+- Códigos HTTP apropiados
+- Mensajes consistentes y localizables
+- Stack traces en desarrollo
+
+### Validaciones
+- Entrada: DTOs con validación struct tags
+- Dominio: Reglas en entidades y value objects
+- Infraestructura: Constraints de BD
+
+### Transacciones
+- Usar transacciones para operaciones múltiples
+- Rollback automático en errores
+- Context timeout para evitar locks
+
+## Flujo de Desarrollo Recomendado
+
+1. **Entender dominio**: Revisar `domain/entity` y `domain/port`
+2. **Implementar caso de uso**: En `application/usecase`
+3. **Crear DTOs**: En `application/dto` si necesario
+4. **Controller**: En `infrastructure/http`
+5. **Tests**: Usando Object Mother pattern
+6. **Rutas**: Registrar en router del módulo
+
+## Integración con Otros Servicios
+
+### Como Provider
+- **API Gateway (Kong)**: Validación de tokens
+- **Otros microservicios**: Verificación de permisos
+- **Frontends**: Autenticación y autorización
+
+### Endpoints Consultados por Kong
+- `GET /auth/validate`: Validar JWT token
+- `GET /users/:id/permissions`: Permisos usuario
+- `GET /tenants/:id/features`: Features tenant
+
+## Comandos Útiles
+
+```bash
+# Health check
+curl http://localhost:8080/health
+
+# Login de prueba
+curl -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@example.com","password":"admin123"}'
+
+# Listar usuarios (con token)
+curl http://localhost:8080/api/v1/users \
+  -H "Authorization: Bearer <token>" \
+  -H "X-Tenant-ID: <tenant-uuid>"
+
+# Obtener planes (público)
+curl http://localhost:8080/api/v1/plans
+```
+
+## Tips de Desarrollo
+
+1. **Validar tenant_id**: Siempre en operaciones multi-tenant
+2. **Usar transacciones**: Para operaciones complejas
+3. **Cachear permisos**: Para mejor performance
+4. **Documentar reglas**: Casos de uso complejos
+5. **Tests actualizados**: Mantener Object Mother sincronizado
+
+**El servicio IAM es crítico para la seguridad del sistema - mantener alta calidad en código y tests.**
