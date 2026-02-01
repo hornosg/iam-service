@@ -7,7 +7,7 @@ services:
   # PostgreSQL (referencia al servicio principal)
   postgres:
     image: postgres:15-alpine
-    container_name: tv-postgres
+    container_name: mc-postgres
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -31,7 +31,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: development
-    container_name: tv-iam-service
+    container_name: mc-iam-service
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
