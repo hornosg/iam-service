@@ -1,7 +1,7 @@
 # Reglas de Cursor para IAM Service
 
 ## Contexto del Proyecto
-Servicio de Identity & Access Management (IAM) del sistema SaaS multi-tenant "Tienda Vecina". Es el núcleo de autenticación y autorización, manejando usuarios, tenants, roles, permisos y planes de suscripción.
+Servicio de Identity & Access Management (IAM) del sistema SaaS multi-tenant "Mercado Cercano". Es el núcleo de autenticación y autorización, manejando usuarios, tenants, roles, permisos y planes de suscripción.
 
 **Puerto de servicio**: 8080 (acceso vía Kong Gateway en 8001)
 
