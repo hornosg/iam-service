@@ -22,10 +22,9 @@ func NewRoleCriteriaBuilder() *RoleCriteriaBuilder {
 func (b *RoleCriteriaBuilder) FromContext(c *gin.Context) *RoleCriteriaBuilder {
 	b.builder = b.helper.BuildBaseFromContext(c)
 
-	// Filtros específicos de roles
+	// Filtros específicos de roles (tabla usa is_active, no status)
 	b.builder.AddUUIDFilter("tenant_id", c.Query("tenant_id"))
 	b.builder.AddEqualFilter("type", c.Query("type"))
-	b.builder.AddEqualFilter("status", c.Query("status"))
 	b.builder.AddLikeFilter("name", c.Query("name"))
 
 	// Filtros especiales
@@ -33,8 +32,9 @@ func (b *RoleCriteriaBuilder) FromContext(c *gin.Context) *RoleCriteriaBuilder {
 		b.builder.AddEqualFilter("type", "SYSTEM")
 	}
 
-	if c.Query("active") == "true" {
-		b.builder.AddEqualFilter("status", "ACTIVE")
+	// Por defecto solo roles activos; active=false muestra todos
+	if c.Query("active") != "false" {
+		b.builder.AddEqualFilter("is_active", "true")
 	}
 
 	return b
@@ -51,7 +51,7 @@ func (b *RoleCriteriaBuilder) Build() crit.Criteria {
 // GetAllowedFields retorna los campos permitidos para filtrado de roles
 func (b *RoleCriteriaBuilder) GetAllowedFields() []string {
 	return []string{
-		"id", "name", "description", "type", "status",
+		"id", "name", "description", "type", "is_active",
 		"tenant_id", "created_at", "updated_at",
 	}
 }
