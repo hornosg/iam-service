@@ -9,6 +9,7 @@ import (
 )
 
 type TokenClaims struct {
+	JTI       uuid.UUID                 `json:"jti"`
 	UserID    uuid.UUID                 `json:"user_id"`
 	Email     string                    `json:"email"`
 	TenantID  uuid.UUID                 `json:"tenant_id"`
@@ -19,6 +20,7 @@ type TokenClaims struct {
 
 func NewTokenClaims(userID, tenantID, roleID uuid.UUID, email string, features *tenant_vo.TenantFeatures, expiresAt time.Time) *TokenClaims {
 	return &TokenClaims{
+		JTI:       uuid.New(),
 		UserID:    userID,
 		Email:     email,
 		TenantID:  tenantID,
@@ -26,6 +28,10 @@ func NewTokenClaims(userID, tenantID, roleID uuid.UUID, email string, features *
 		Features:  features,
 		ExpiresAt: expiresAt.Unix(),
 	}
+}
+
+func (c TokenClaims) GetJTI() uuid.UUID {
+	return c.JTI
 }
 
 func (c TokenClaims) GetExpirationTime() (*jwt.NumericDate, error) {
@@ -56,5 +62,5 @@ func (c TokenClaims) GetAudience() (jwt.ClaimStrings, error) {
 }
 
 func (c TokenClaims) GetID() (string, error) {
-	return c.UserID.String(), nil
+	return c.JTI.String(), nil
 }

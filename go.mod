@@ -6,10 +6,11 @@ toolchain go1.23.5
 
 require (
 	github.com/gin-gonic/gin v1.10.0
-	github.com/golang-jwt/jwt/v5 v5.2.0
+	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/google/uuid v1.6.0
 	github.com/lib/pq v1.10.9
 	github.com/mercadocercano/criteria v0.1.0
+	github.com/mercadocercano/middleware v0.1.0
 	github.com/prometheus/client_golang v1.22.0
 	github.com/stretchr/testify v1.10.0
 	golang.org/x/crypto v0.32.0
@@ -53,4 +54,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/mercadocercano/criteria => ../../libs/criteria
+replace (
+	github.com/mercadocercano/criteria => ../../libs/criteria
+	github.com/mercadocercano/middleware => ../../libs/middleware
+)

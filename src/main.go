@@ -7,9 +7,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
+	tenantmw "github.com/mercadocercano/middleware"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"iam/src/auth/infrastructure/config"
+	seclog "iam/src/auth/infrastructure/logging"
 	planConfig "iam/src/plan/infrastructure/config"
 	roleConfig "iam/src/role/infrastructure/config"
 	tenantConfig "iam/src/tenant/infrastructure/config"
@@ -30,6 +32,22 @@ func main() {
 	// Agregar middlewares básicos necesarios
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
+
+	// Validación de tenant (X-Tenant-ID vs JWT tenant_id)
+	securityLogger := seclog.NewSecurityLogger()
+	router.Use(tenantmw.TenantValidation(tenantmw.TenantValidationConfig{
+		JWTSecret: os.Getenv("JWT_SECRET"),
+		ExcludedRoutes: []string{
+			"/health",
+			"/metrics",
+			"/api/v1/auth/login",
+			"/api/v1/auth/register",
+			"/api/v1/auth/google",
+			"/api/v1/auth/refresh",
+			"/api/v1/auth/validate",
+		},
+		OnTenantMismatch: securityLogger.LogTenantMismatch,
+	}))
 
 	// Configurar Prometheus metrics si está habilitado
 	prometheusEnabled := os.Getenv("PROMETHEUS_ENABLED")
@@ -77,7 +95,7 @@ func main() {
 	tenantService := tenantConfig.SetupTenantModule(apiV1, db)
 
 	// 3. Auth Module (depende de User y Tenant)
-	authConfig := config.DefaultAuthModuleConfig()
+	authConfig := config.NewAuthModuleConfigFromEnv()
 	config.SetupAuthModule(apiV1, db, userFinderService, tenantService, authConfig)
 
 	// 4. Plan Module (independiente)

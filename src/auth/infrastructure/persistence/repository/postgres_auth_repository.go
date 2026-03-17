@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -91,6 +92,62 @@ func (r *PostgresAuthRepository) DeleteAllUserRefreshTokens(ctx context.Context,
 	}
 
 	return nil
+}
+
+// RevokeToken inserta un JTI en la tabla de tokens revocados
+func (r *PostgresAuthRepository) RevokeToken(ctx context.Context, jti uuid.UUID, userID uuid.UUID, expiresAt time.Time) error {
+	query := `
+		INSERT INTO revoked_tokens (jti, user_id, expires_at)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (jti) DO NOTHING`
+
+	_, err := r.db.ExecContext(ctx, query, jti, userID, expiresAt)
+	if err != nil {
+		return fmt.Errorf("error revocando token: %w", err)
+	}
+	return nil
+}
+
+// IsTokenRevoked verifica si un JTI está en la lista de revocación
+func (r *PostgresAuthRepository) IsTokenRevoked(ctx context.Context, jti uuid.UUID) (bool, error) {
+	query := `SELECT EXISTS(SELECT 1 FROM revoked_tokens WHERE jti = $1)`
+
+	var exists bool
+	err := r.db.QueryRowContext(ctx, query, jti).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("error verificando token revocado: %w", err)
+	}
+	return exists, nil
+}
+
+// RevokeAllUserTokens inserta una entrada genérica para revocar todos los tokens de un usuario
+func (r *PostgresAuthRepository) RevokeAllUserTokens(ctx context.Context, userID uuid.UUID, expiresAt time.Time) error {
+	jti := uuid.New()
+	query := `
+		INSERT INTO revoked_tokens (jti, user_id, expires_at)
+		VALUES ($1, $2, $3)`
+
+	_, err := r.db.ExecContext(ctx, query, jti, userID, expiresAt)
+	if err != nil {
+		return fmt.Errorf("error revocando todos los tokens del usuario: %w", err)
+	}
+	return nil
+}
+
+// CleanupExpiredRevocations elimina entradas de revocación expiradas
+func (r *PostgresAuthRepository) CleanupExpiredRevocations(ctx context.Context) (int64, error) {
+	query := `DELETE FROM revoked_tokens WHERE expires_at < NOW()`
+
+	result, err := r.db.ExecContext(ctx, query)
+	if err != nil {
+		return 0, fmt.Errorf("error limpiando tokens revocados expirados: %w", err)
+	}
+
+	count, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("error obteniendo filas afectadas: %w", err)
+	}
+	return count, nil
 }
 
 // GetUserByFederatedID obtiene un usuario por su ID federado

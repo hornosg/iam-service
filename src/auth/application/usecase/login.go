@@ -19,6 +19,7 @@ import (
 	"iam/src/auth/domain/entity"
 	"iam/src/auth/domain/port"
 	"iam/src/auth/domain/value_object"
+	"iam/src/auth/infrastructure/logging"
 	tenant_vo "iam/src/tenant/domain/value_object"
 )
 
@@ -37,11 +38,12 @@ type AuthConfig struct {
 }
 
 type LoginUseCase struct {
-	config        AuthConfig
-	authRepo      port.AuthRepository
-	userService   port.UserService
-	tenantService port.TenantService
-	httpClient    *http.Client
+	config         AuthConfig
+	authRepo       port.AuthRepository
+	userService    port.UserService
+	tenantService  port.TenantService
+	httpClient     *http.Client
+	securityLogger *logging.SecurityLogger
 }
 
 func NewLoginUseCase(
@@ -51,15 +53,20 @@ func NewLoginUseCase(
 	tenantService port.TenantService,
 ) *LoginUseCase {
 	return &LoginUseCase{
-		config:        config,
-		authRepo:      authRepo,
-		userService:   userService,
-		tenantService: tenantService,
-		httpClient:    &http.Client{},
+		config:         config,
+		authRepo:       authRepo,
+		userService:    userService,
+		tenantService:  tenantService,
+		httpClient:     &http.Client{},
+		securityLogger: logging.NewSecurityLogger(),
 	}
 }
 
 func (uc *LoginUseCase) Execute(ctx context.Context, req *request.LoginRequest) (*response.LoginResponse, error) {
+	return uc.ExecuteWithInfo(ctx, req, "", "")
+}
+
+func (uc *LoginUseCase) ExecuteWithInfo(ctx context.Context, req *request.LoginRequest, ipAddress, userAgent string) (*response.LoginResponse, error) {
 	log.Printf("[LOGIN] Iniciando proceso de login para email: %s, provider: %s", req.Email, req.Provider)
 
 	if err := req.Validate(); err != nil {
@@ -84,10 +91,18 @@ func (uc *LoginUseCase) Execute(ctx context.Context, req *request.LoginRequest) 
 
 	if err != nil {
 		log.Printf("[LOGIN] Error en proceso de autenticación: %v", err)
+		reason := "unknown"
+		if errors.Is(err, ErrInvalidCredentials) {
+			reason = "invalid_credentials"
+		} else if errors.Is(err, ErrUserNotFound) {
+			reason = "user_not_found"
+		}
+		uc.securityLogger.LogLoginFailed(req.Email, ipAddress, userAgent, reason)
 		return nil, err
 	}
 
 	log.Printf("[LOGIN] Autenticación exitosa para usuario ID: %s, email: %s", user.ID, user.Email)
+	uc.securityLogger.LogLoginSuccess(user.ID.String(), user.TenantID.String(), user.Email, ipAddress, userAgent)
 
 	// Generar tokens
 	accessToken, err := uc.generateAccessToken(user)
