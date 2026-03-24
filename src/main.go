@@ -39,6 +39,7 @@ func main() {
 		JWTSecret: os.Getenv("JWT_SECRET"),
 		ExcludedRoutes: []string{
 			"/health",
+			"/api/v1/health",
 			"/metrics",
 			"/api/v1/auth/login",
 			"/api/v1/auth/register",
