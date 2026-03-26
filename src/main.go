@@ -42,7 +42,10 @@ func main() {
 			"/api/v1/health",
 			"/metrics",
 			"/api/v1/auth/*",
-			"/iam/api/v1/auth/*",
+			"/api/v1/tenants*",
+			"/api/v1/users*",
+			"/api/v1/roles*",
+			"/api/v1/plans*",
 		},
 		OnTenantMismatch: securityLogger.LogTenantMismatch,
 	}))

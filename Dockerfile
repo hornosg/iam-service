@@ -70,7 +70,6 @@ RUN if [ -n "$GITHUB_TOKEN" ]; then git config --global url."https://${GITHUB_TO
 
 WORKDIR /app
 
-
 # Copy go mod files first (for better caching)
 COPY go.mod go.sum ./
 
@@ -94,8 +93,8 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 
 EXPOSE 8080
 
-# Use Air for hot reload in development
-CMD ["air", "-c", ".air.toml"]
+# Entrypoint: configure git for private modules at runtime, then run Air
+CMD sh -c 'if [ -n "$GITHUB_TOKEN" ]; then git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"; fi && air -c .air.toml'
 
 # ==============================================
 # Stage 4: Production stage (Distroless)
