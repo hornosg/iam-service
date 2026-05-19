@@ -35,6 +35,21 @@ jobs:
           username: ${{ secrets.DOCR_TOKEN }}
           password: ${{ secrets.DOCR_TOKEN }}
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Configure private modules
+        run: git config --global url."https://${{ secrets.GO_PRIVATE_TOKEN }}@github.com/".insteadOf "https://github.com/"
+
+      - name: Run tests
+        run: go test ./... -race -timeout 120s
+
+      - name: Run vet
+        run: go vet ./...
+
       - name: Build and Push Image (linux/amd64)
         uses: docker/build-push-action@v5
         with:
@@ -47,7 +62,6 @@ jobs:
           build-args: |
             GITHUB_TOKEN=${{ secrets.GO_PRIVATE_TOKEN }}
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
       - name: Set up SSH key
@@ -64,7 +78,7 @@ jobs:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           DROPLET_IP: ${{ secrets.DROPLET_IP }}
 
-      - name: Deploy to K8s
+      - name: Deploy to K8s with rollback
         run: |
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no deploy@${{ secrets.DROPLET_IP }} \
             "export KUBECONFIG=/home/deploy/.kube/config && \
@@ -72,7 +86,9 @@ jobs:
                ${{ env.CONTAINER_NAME }}=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
                -n ${{ env.NAMESPACE }} && \
              kubectl rollout status deployment/${{ env.DEPLOYMENT_NAME }} \
-               -n ${{ env.NAMESPACE }} --timeout=180s"
+               -n ${{ env.NAMESPACE }} --timeout=300s || \
+             (kubectl rollout undo deployment/${{ env.DEPLOYMENT_NAME }} -n ${{ env.NAMESPACE }} && \
+              echo 'Rollback triggered' && exit 1)"
 
       - name: Verify Pod Ready
         run: |
@@ -83,3 +99,38 @@ jobs:
              echo \"Pod ready: \$READY\" && echo \"Image: \$IMAGE\" && \
              [ \"\$READY\" = 'true' ] || (echo '❌ Pod not ready'; exit 1) && \
              echo '✅ iam-service is running and healthy'"
+
+      - name: Collect diagnostics and notify Telegram on failure
+        if: failure()
+        run: |
+          DIAG=""
+          if [ -f ~/.ssh/deploy_key ]; then
+            DIAG=$(ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+              deploy@${{ secrets.DROPLET_IP }} \
+              "export KUBECONFIG=/home/deploy/.kube/config
+               echo '=== Pod Status ==='
+               kubectl get pods -l app=${{ env.DEPLOYMENT_NAME }} -n ${{ env.NAMESPACE }} 2>/dev/null | tail -5
+               echo '=== Last Events ==='
+               kubectl describe pod -l app=${{ env.DEPLOYMENT_NAME }} -n ${{ env.NAMESPACE }} 2>/dev/null \
+                 | grep -A 8 'Events:' | tail -10
+               echo '=== Pod Logs ==='
+               kubectl logs -l app=${{ env.DEPLOYMENT_NAME }} -n ${{ env.NAMESPACE }} --previous --tail=20 2>/dev/null \
+                 || kubectl logs -l app=${{ env.DEPLOYMENT_NAME }} -n ${{ env.NAMESPACE }} --tail=20 2>/dev/null \
+                 || echo 'no logs'" \
+              2>/dev/null | head -c 2800) || DIAG="SSH unavailable (build/push stage failure)"
+          fi
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+            --data-urlencode text="❌ FAILED: ${{ env.IMAGE_NAME }}
+Commit: ${{ github.sha }}
+Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+${DIAG}"
+
+      - name: Notify Telegram on success
+        if: success()
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+            --data-urlencode text="✅ DEPLOYED: ${{ env.IMAGE_NAME }}
+Commit: ${{ github.sha }}"
