@@ -1,7 +1,7 @@
 package port
 
 import (
-	"iam/src/shared/domain/service"
+	"github.com/mercadocercano/go-shared/domain/service"
 )
 
 // UserService es un alias de la interfaz compartida para mantener consistencia en el módulo auth

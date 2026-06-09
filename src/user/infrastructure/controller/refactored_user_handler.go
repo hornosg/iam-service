@@ -106,6 +106,11 @@ func (h *RefactoredUserHandler) GetUserByID(c *gin.Context) {
 		return
 	}
 
+	if tenantID := c.GetHeader("X-Tenant-ID"); tenantID != "" && user.TenantID.String() != tenantID {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Usuario no encontrado"})
+		return
+	}
+
 	c.JSON(http.StatusOK, user)
 }
 
@@ -138,6 +143,14 @@ func (h *RefactoredUserHandler) UpdateUser(c *gin.Context) {
 	}
 
 	req.ID = id
+
+	if tenantID := c.GetHeader("X-Tenant-ID"); tenantID != "" {
+		existing, err := h.getUserByIDUseCase.Execute(c.Request.Context(), id)
+		if err != nil || existing.TenantID.String() != tenantID {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Usuario no encontrado"})
+			return
+		}
+	}
 
 	user, err := h.updateUserUseCase.Execute(c.Request.Context(), &req)
 	if err != nil {
@@ -177,7 +190,7 @@ func (h *RefactoredUserHandler) UpdateUser(c *gin.Context) {
 // @Param page_size query int false "Page size (max 100)" default(10)
 // @Param sort_by query string false "Sort field" default("created_at")
 // @Param sort_dir query string false "Sort direction (asc, desc)" default("desc")
-// @Success 200 {object} criteria.ListResponse[entity.User]
+// @Success 200 {object} criteria.ListResponse[response.UserResponse]
 // @Failure 400 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
 // @Router /users [get]
@@ -225,6 +238,14 @@ func (h *RefactoredUserHandler) DeleteUser(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ID de usuario inválido"})
 		return
+	}
+
+	if tenantID := c.GetHeader("X-Tenant-ID"); tenantID != "" {
+		existing, err := h.getUserByIDUseCase.Execute(c.Request.Context(), id)
+		if err != nil || existing.TenantID.String() != tenantID {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Usuario no encontrado"})
+			return
+		}
 	}
 
 	err = h.deleteUserUseCase.Execute(c.Request.Context(), id)

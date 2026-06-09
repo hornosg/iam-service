@@ -8,7 +8,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 
+	"io"
+
 	"iam/src/auth/application/usecase"
+	sharedlog "github.com/mercadocercano/go-shared/infrastructure/logging"
 	authEntity "iam/test/auth/domain/entity"
 	"iam/test/auth/infrastructure/persistence/repository"
 )
@@ -18,7 +21,7 @@ func TestRevokeAllUseCase_Execute_HappyPath_RevokesAllTokens(t *testing.T) {
 	mockAuthRepo := repository.NewMockAuthRepository()
 	accessTokenExpiry := 15 * time.Minute
 
-	revokeAllUseCase := usecase.NewRevokeAllUseCase(mockAuthRepo, accessTokenExpiry)
+	revokeAllUseCase := usecase.NewRevokeAllUseCase(mockAuthRepo, accessTokenExpiry, sharedlog.NewSecurityLoggerWithWriter("iam-test", io.Discard))
 
 	userID := uuid.New()
 	tokenMother := authEntity.Create()
@@ -42,7 +45,7 @@ func TestRevokeAllUseCase_Execute_RevokeAllFails_ReturnsError(t *testing.T) {
 	mockAuthRepo := repository.NewMockAuthRepository()
 	accessTokenExpiry := 15 * time.Minute
 
-	revokeAllUseCase := usecase.NewRevokeAllUseCase(mockAuthRepo, accessTokenExpiry)
+	revokeAllUseCase := usecase.NewRevokeAllUseCase(mockAuthRepo, accessTokenExpiry, sharedlog.NewSecurityLoggerWithWriter("iam-test", io.Discard))
 	mockAuthRepo.ShouldFailOn("RevokeAllUserTokens")
 
 	userID := uuid.New()
@@ -62,7 +65,7 @@ func TestRevokeAllUseCase_Execute_DeleteRefreshFails_ReturnsError(t *testing.T) 
 	mockAuthRepo := repository.NewMockAuthRepository()
 	accessTokenExpiry := 15 * time.Minute
 
-	revokeAllUseCase := usecase.NewRevokeAllUseCase(mockAuthRepo, accessTokenExpiry)
+	revokeAllUseCase := usecase.NewRevokeAllUseCase(mockAuthRepo, accessTokenExpiry, sharedlog.NewSecurityLoggerWithWriter("iam-test", io.Discard))
 	mockAuthRepo.ShouldFailOn("DeleteAllUserRefreshTokens")
 
 	userID := uuid.New()
@@ -82,7 +85,7 @@ func TestRevokeAllUseCase_Execute_NoTokens_StillSucceeds(t *testing.T) {
 	mockAuthRepo := repository.NewMockAuthRepository()
 	accessTokenExpiry := 15 * time.Minute
 
-	revokeAllUseCase := usecase.NewRevokeAllUseCase(mockAuthRepo, accessTokenExpiry)
+	revokeAllUseCase := usecase.NewRevokeAllUseCase(mockAuthRepo, accessTokenExpiry, sharedlog.NewSecurityLoggerWithWriter("iam-test", io.Discard))
 	userID := uuid.New()
 
 	// Act

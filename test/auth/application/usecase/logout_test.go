@@ -8,8 +8,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 
+	"io"
+
 	"iam/src/auth/application/usecase"
 	"iam/src/auth/domain/value_object"
+	sharedlog "github.com/mercadocercano/go-shared/infrastructure/logging"
 	authEntity "iam/test/auth/domain/entity"
 	"iam/test/auth/infrastructure/persistence/repository"
 )
@@ -26,7 +29,7 @@ func newTestClaims(userID uuid.UUID, tenantID uuid.UUID) *value_object.TokenClai
 func TestLogoutUseCase_Execute(t *testing.T) {
 	// Arrange
 	mockRepo := repository.NewMockAuthRepository()
-	logoutUseCase := usecase.NewLogoutUseCase(mockRepo)
+	logoutUseCase := usecase.NewLogoutUseCase(mockRepo, sharedlog.NewSecurityLoggerWithWriter("iam-test", io.Discard))
 	ctx := context.Background()
 	tokenMother := authEntity.Create()
 

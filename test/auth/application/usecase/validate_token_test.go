@@ -4,30 +4,25 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"iam/src/auth/application/usecase"
 	"iam/src/auth/domain/value_object"
-	tenant_vo "iam/src/tenant/domain/value_object"
+	"iam/src/auth/infrastructure/adapter"
 )
 
 func generateTestToken(secret string, claims *value_object.TokenClaims) string {
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenStr, _ := token.SignedString([]byte(secret))
+	svc := adapter.NewJWTServiceAdapter(secret)
+	tokenStr, _ := svc.Sign(claims)
 	return tokenStr
 }
 
 func TestValidateTokenUseCase_Execute_ValidToken_ReturnsClaims(t *testing.T) {
 	// Arrange
 	secret := "test-secret-key-for-testing-purposes"
-	config := usecase.AuthConfig{
-		JWTSecret: secret,
-	}
-
-	validateUseCase := usecase.NewValidateTokenUseCase(config)
+	validateUseCase := usecase.NewValidateTokenUseCase(adapter.NewJWTServiceAdapter(secret))
 
 	userID := uuid.New()
 	tenantID := uuid.New()
@@ -38,7 +33,7 @@ func TestValidateTokenUseCase_Execute_ValidToken_ReturnsClaims(t *testing.T) {
 		tenantID,
 		roleID,
 		"test@example.com",
-		tenant_vo.NewTenantFeatures(),
+		value_object.DefaultTenantFeatures(),
 		time.Now().Add(15*time.Minute),
 	)
 
@@ -59,18 +54,14 @@ func TestValidateTokenUseCase_Execute_ValidToken_ReturnsClaims(t *testing.T) {
 func TestValidateTokenUseCase_Execute_ExpiredToken_ReturnsError(t *testing.T) {
 	// Arrange
 	secret := "test-secret-key-for-testing-purposes"
-	config := usecase.AuthConfig{
-		JWTSecret: secret,
-	}
-
-	validateUseCase := usecase.NewValidateTokenUseCase(config)
+	validateUseCase := usecase.NewValidateTokenUseCase(adapter.NewJWTServiceAdapter(secret))
 
 	claims := value_object.NewTokenClaims(
 		uuid.New(),
 		uuid.New(),
 		uuid.New(),
 		"test@example.com",
-		tenant_vo.NewTenantFeatures(),
+		value_object.DefaultTenantFeatures(),
 		time.Now().Add(-1*time.Hour), // Ya expirado
 	)
 
@@ -87,11 +78,7 @@ func TestValidateTokenUseCase_Execute_ExpiredToken_ReturnsError(t *testing.T) {
 
 func TestValidateTokenUseCase_Execute_InvalidFormat_ReturnsError(t *testing.T) {
 	// Arrange
-	config := usecase.AuthConfig{
-		JWTSecret: "test-secret",
-	}
-
-	validateUseCase := usecase.NewValidateTokenUseCase(config)
+	validateUseCase := usecase.NewValidateTokenUseCase(adapter.NewJWTServiceAdapter("test-secret"))
 
 	// Act
 	result, err := validateUseCase.Execute("not-a-valid-jwt-token")
@@ -103,18 +90,14 @@ func TestValidateTokenUseCase_Execute_InvalidFormat_ReturnsError(t *testing.T) {
 
 func TestValidateTokenUseCase_Execute_WrongSecret_ReturnsError(t *testing.T) {
 	// Arrange
-	config := usecase.AuthConfig{
-		JWTSecret: "correct-secret",
-	}
-
-	validateUseCase := usecase.NewValidateTokenUseCase(config)
+	validateUseCase := usecase.NewValidateTokenUseCase(adapter.NewJWTServiceAdapter("correct-secret"))
 
 	claims := value_object.NewTokenClaims(
 		uuid.New(),
 		uuid.New(),
 		uuid.New(),
 		"test@example.com",
-		tenant_vo.NewTenantFeatures(),
+		value_object.DefaultTenantFeatures(),
 		time.Now().Add(15*time.Minute),
 	)
 
@@ -131,11 +114,7 @@ func TestValidateTokenUseCase_Execute_WrongSecret_ReturnsError(t *testing.T) {
 
 func TestValidateTokenUseCase_Execute_EmptyToken_ReturnsError(t *testing.T) {
 	// Arrange
-	config := usecase.AuthConfig{
-		JWTSecret: "test-secret",
-	}
-
-	validateUseCase := usecase.NewValidateTokenUseCase(config)
+	validateUseCase := usecase.NewValidateTokenUseCase(adapter.NewJWTServiceAdapter("test-secret"))
 
 	// Act
 	result, err := validateUseCase.Execute("")

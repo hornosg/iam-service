@@ -9,7 +9,7 @@ import (
 
 type CreateTenantRequest struct {
 	Name        string `json:"name" binding:"required,min=2,max=100"`
-	Slug        string `json:"slug" binding:"required,min=2,max=50,alphanum"`
+	Slug        string `json:"slug" binding:"required,min=2,max=50,slug"`
 	Description string `json:"description" binding:"required,min=5,max=500"`
 	Type        string `json:"type" binding:"required,oneof=PERSONAL STARTUP BUSINESS ENTERPRISE"`
 	Domain      string `json:"domain,omitempty" binding:"omitempty,fqdn"`

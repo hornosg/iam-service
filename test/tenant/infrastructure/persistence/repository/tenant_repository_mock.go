@@ -14,9 +14,9 @@ import (
 
 // Errores mock
 var (
-	ErrMockFailedOp          = errors.New("operacion fallida (simulada)")
-	ErrMockTenantNotFound    = errors.New("tenant no encontrado (simulado)")
-	ErrMockTenantDuplicated  = errors.New("tenant duplicado (simulado)")
+	ErrMockFailedOp         = errors.New("operacion fallida (simulada)")
+	ErrMockTenantNotFound   = errors.New("tenant no encontrado (simulado)")
+	ErrMockTenantDuplicated = errors.New("tenant duplicado (simulado)")
 )
 
 // MockTenantRepository implementa un repositorio en memoria para pruebas de tenant

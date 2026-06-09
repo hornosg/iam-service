@@ -1,0 +1,1227 @@
+{
+  "info": {
+    "_postman_id": "iam-mc-collection-v1",
+    "name": "IAM Service — Mercado Cercano",
+    "description": "Multi-Tenant IAM — Auth, Plans, Roles, Tenants, Users. Ejecutar carpetas en orden 1→9.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "hostUrl",       "value": "http://localhost:8080",          "type": "string" },
+    { "key": "baseUrl",       "value": "http://localhost:8080/api/v1",   "type": "string" },
+    { "key": "adminEmail",    "value": "admin@saasadmin.com",            "type": "string" },
+    { "key": "adminPassword", "value": "123456",                         "type": "string" },
+    { "key": "token",         "value": "",                               "type": "string" },
+    { "key": "refreshToken",  "value": "",                               "type": "string" },
+    { "key": "adminUserId",   "value": "",                               "type": "string" },
+    { "key": "planId",        "value": "",                               "type": "string" },
+    { "key": "roleId",        "value": "",                               "type": "string" },
+    { "key": "tenantId",      "value": "",                               "type": "string" },
+    { "key": "tenantSlug",    "value": "",                               "type": "string" },
+    { "key": "userId",        "value": "",                               "type": "string" },
+    { "key": "tenantBId",     "value": "",                               "type": "string" },
+    { "key": "tenantBSlug",   "value": "",                               "type": "string" },
+    { "key": "userBId",       "value": "",                               "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "1. Health",
+      "item": [
+        {
+          "name": "GET /health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{hostUrl}}/health",
+              "host": ["{{hostUrl}}"],
+              "path": ["health"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                "pm.test(\"Service up\", () => pm.expect(pm.response.json().status).to.eql(\"up\"));"
+              ]
+            }
+          }]
+        }
+      ]
+    },
+    {
+      "name": "2. Auth Bootstrap",
+      "item": [
+        {
+          "name": "POST /auth/login",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\",\n  \"provider\": \"LOCAL\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                "const j = pm.response.json();",
+                "pm.test(\"Has access_token\", () => pm.expect(j.access_token).to.be.a(\"string\").and.not.be.empty);",
+                "pm.test(\"Token type Bearer\", () => pm.expect(j.token_type).to.eql(\"Bearer\"));",
+                "pm.collectionVariables.set(\"token\", j.access_token);",
+                "pm.collectionVariables.set(\"refreshToken\", j.refresh_token);",
+                "pm.collectionVariables.set(\"adminUserId\", j.user.id);"
+              ]
+            }
+          }]
+        }
+      ]
+    },
+    {
+      "name": "3. Plans",
+      "item": [
+        {
+          "name": "POST /plans — crear plan",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Plan Premium Test\",\n  \"description\": \"Plan de prueba para e2e\",\n  \"type\": \"PREMIUM\",\n  \"price_month\": 29.99,\n  \"price_year\": 299.99,\n  \"features\": [\"analytics\", \"api_access\"]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/plans",
+              "host": ["{{baseUrl}}"],
+              "path": ["plans"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+                "const j = pm.response.json();",
+                "pm.test(\"Has id\", () => pm.expect(j.id).to.be.a(\"string\").and.not.be.empty);",
+                "pm.test(\"Type PREMIUM\", () => pm.expect(j.type).to.eql(\"PREMIUM\"));",
+                "pm.collectionVariables.set(\"planId\", j.id);"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "GET /plans — listar",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/plans?page=1&page_size=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["plans"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "page_size", "value": "10" }
+              ]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                "const j = pm.response.json();",
+                "pm.test(\"Has items array\", () => pm.expect(j.items).to.be.an(\"array\"));",
+                "pm.test(\"Has total_count\", () => pm.expect(j.total_count).to.be.a(\"number\"));"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "GET /plans/:id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/plans/{{planId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["plans", "{{planId}}"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                "const j = pm.response.json();",
+                "pm.test(\"ID matches\", () => pm.expect(j.id).to.eql(pm.collectionVariables.get(\"planId\")));"
+              ]
+            }
+          }]
+        }
+      ]
+    },
+    {
+      "name": "4. Roles",
+      "item": [
+        {
+          "name": "POST /roles — crear rol",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Editor Test\",\n  \"description\": \"Rol de editor para pruebas e2e\",\n  \"type\": \"CUSTOM\",\n  \"permissions\": [\"read\", \"write\"]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/roles",
+              "host": ["{{baseUrl}}"],
+              "path": ["roles"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+                "const j = pm.response.json();",
+                "pm.test(\"Has id\", () => pm.expect(j.id).to.be.a(\"string\").and.not.be.empty);",
+                "pm.test(\"Type CUSTOM\", () => pm.expect(j.type).to.eql(\"CUSTOM\"));",
+                "pm.collectionVariables.set(\"roleId\", j.id);"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "GET /roles — listar",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/roles?page=1&page_size=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["roles"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "page_size", "value": "10" }
+              ]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                "const j = pm.response.json();",
+                "pm.test(\"Has items array\", () => pm.expect(j.items).to.be.an(\"array\"));"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "GET /roles/:id",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/roles/{{roleId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["roles", "{{roleId}}"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                "const j = pm.response.json();",
+                "pm.test(\"ID matches\", () => pm.expect(j.id).to.eql(pm.collectionVariables.get(\"roleId\")));"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "PUT /roles/:id — actualizar",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Editor Test (updated)\",\n  \"description\": \"Rol de editor actualizado\",\n  \"permissions\": [\"read\", \"write\", \"delete\"]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/roles/{{roleId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["roles", "{{roleId}}"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                "const j = pm.response.json();",
+                "pm.test(\"Permissions updated\", () => pm.expect(j.permissions).to.include(\"delete\"));"
+              ]
+            }
+          }]
+        }
+      ]
+    },
+    {
+      "name": "5. Tenants",
+      "item": [
+        {
+          "name": "POST /tenants — crear tenant (público)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Tenant E2E Test\",\n  \"slug\": \"tenant-e2e-test\",\n  \"description\": \"Tenant de pruebas end-to-end\",\n  \"type\": \"STARTUP\",\n  \"owner_id\": \"{{adminUserId}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tenants",
+              "host": ["{{baseUrl}}"],
+              "path": ["tenants"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+                "const j = pm.response.json();",
+                "pm.test(\"Has id\", () => pm.expect(j.id).to.be.a(\"string\").and.not.be.empty);",
+                "pm.test(\"Slug correcto\", () => pm.expect(j.slug).to.eql(\"tenant-e2e-test\"));",
+                "pm.collectionVariables.set(\"tenantId\", j.id);",
+                "pm.collectionVariables.set(\"tenantSlug\", j.slug);"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "GET /tenants — listar",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/tenants?page=1&page_size=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["tenants"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "page_size", "value": "10" }
+              ]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                "const j = pm.response.json();",
+                "pm.test(\"Has tenants array\", () => pm.expect(j.tenants).to.be.an(\"array\"));"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "GET /tenants/:id",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/tenants/{{tenantId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["tenants", "{{tenantId}}"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                "const j = pm.response.json();",
+                "pm.test(\"ID matches\", () => pm.expect(j.id).to.eql(pm.collectionVariables.get(\"tenantId\")));"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "GET /tenants/by-slug/:slug",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/tenants/by-slug/{{tenantSlug}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["tenants", "by-slug", "{{tenantSlug}}"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                "const j = pm.response.json();",
+                "pm.test(\"Slug matches\", () => pm.expect(j.slug).to.eql(pm.collectionVariables.get(\"tenantSlug\")));"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "PUT /tenants/:id — actualizar",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Tenant E2E Updated\",\n  \"description\": \"Descripcion actualizada para e2e\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tenants/{{tenantId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["tenants", "{{tenantId}}"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                "const j = pm.response.json();",
+                "pm.test(\"Name updated\", () => pm.expect(j.name).to.eql(\"Tenant E2E Updated\"));"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "POST /tenants/:id/plan — asignar plan",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"plan_id\": \"{{planId}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tenants/{{tenantId}}/plan",
+              "host": ["{{baseUrl}}"],
+              "path": ["tenants", "{{tenantId}}", "plan"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                "const j = pm.response.json();",
+                "pm.test(\"Plan assigned\", () => pm.expect(j.plan_id).to.eql(pm.collectionVariables.get(\"planId\")));"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "PATCH /tenants/:id/features — actualizar features",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"friends_family\": true,\n  \"premium_analytics\": false\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tenants/{{tenantId}}/features",
+              "host": ["{{baseUrl}}"],
+              "path": ["tenants", "{{tenantId}}", "features"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                "const j = pm.response.json();",
+                "pm.test(\"Feature updated\", () => pm.expect(j.features.friends_family).to.be.true);"
+              ]
+            }
+          }]
+        }
+      ]
+    },
+    {
+      "name": "6. Users",
+      "item": [
+        {
+          "name": "POST /users — crear usuario",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Tenant-ID", "value": "{{tenantId}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"testuser@example.com\",\n  \"password\": \"TestPass1234!\",\n  \"tenant_id\": \"{{tenantId}}\",\n  \"role_id\": \"{{roleId}}\",\n  \"provider\": \"LOCAL\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["users"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+                "const j = pm.response.json();",
+                "pm.test(\"Has id\", () => pm.expect(j.id).to.be.a(\"string\").and.not.be.empty);",
+                "pm.test(\"Email correcto\", () => pm.expect(j.email).to.eql(\"testuser@example.com\"));",
+                "pm.test(\"Tenant ID correcto\", () => pm.expect(j.tenant_id).to.eql(pm.collectionVariables.get(\"tenantId\")));",
+                "pm.collectionVariables.set(\"userId\", j.id);"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "GET /users — listar",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Tenant-ID", "value": "{{tenantId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users?page=1&page_size=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["users"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "page_size", "value": "10" }
+              ]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                "const j = pm.response.json();",
+                "pm.test(\"Has items array\", () => pm.expect(j.items).to.be.an(\"array\"));"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "GET /users/:id",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Tenant-ID", "value": "{{tenantId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "{{userId}}"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                "const j = pm.response.json();",
+                "pm.test(\"ID matches\", () => pm.expect(j.id).to.eql(pm.collectionVariables.get(\"userId\")));"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "PUT /users/:id — actualizar",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Tenant-ID", "value": "{{tenantId}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"ACTIVE\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "{{userId}}"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                "const j = pm.response.json();",
+                "pm.test(\"Status ACTIVE\", () => pm.expect(j.status).to.eql(\"ACTIVE\"));"
+              ]
+            }
+          }]
+        }
+      ]
+    },
+    {
+      "name": "7. Multi-Tenant Isolation",
+      "description": "Crea Tenant B + User B; verifica que los listados y accesos no se mezclan entre tenants.",
+      "item": [
+        {
+          "name": "POST /tenants — crear Tenant B",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Tenant B Isolation Test\",\n  \"slug\": \"tenant-b-isolation\",\n  \"description\": \"Segundo tenant para pruebas de aislamiento\",\n  \"type\": \"BUSINESS\",\n  \"owner_id\": \"{{adminUserId}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tenants",
+              "host": ["{{baseUrl}}"],
+              "path": ["tenants"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+                "const j = pm.response.json();",
+                "pm.test(\"Slug correcto\", () => pm.expect(j.slug).to.eql(\"tenant-b-isolation\"));",
+                "pm.collectionVariables.set(\"tenantBId\", j.id);",
+                "pm.collectionVariables.set(\"tenantBSlug\", j.slug);"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "POST /users — crear User B en Tenant B",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Tenant-ID", "value": "{{tenantBId}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"userb@example.com\",\n  \"password\": \"TestPassB1234!\",\n  \"tenant_id\": \"{{tenantBId}}\",\n  \"role_id\": \"{{roleId}}\",\n  \"provider\": \"LOCAL\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["users"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+                "const j = pm.response.json();",
+                "pm.test(\"Tenant B correcto\", () => pm.expect(j.tenant_id).to.eql(pm.collectionVariables.get(\"tenantBId\")));",
+                "pm.collectionVariables.set(\"userBId\", j.id);"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "GET /users Tenant A — no debe incluir User B",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Tenant-ID", "value": "{{tenantId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["users"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                "const j = pm.response.json();",
+                "const userBId = pm.collectionVariables.get(\"userBId\");",
+                "const ids = (j.items || []).map(u => u.id);",
+                "pm.test(\"User B no aparece en Tenant A\", () => pm.expect(ids).to.not.include(userBId));",
+                "const userAId = pm.collectionVariables.get(\"userId\");",
+                "pm.test(\"User A sí aparece en Tenant A\", () => pm.expect(ids).to.include(userAId));"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "GET /users Tenant B — no debe incluir User A",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Tenant-ID", "value": "{{tenantBId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["users"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                "const j = pm.response.json();",
+                "const userAId = pm.collectionVariables.get(\"userId\");",
+                "const ids = (j.items || []).map(u => u.id);",
+                "pm.test(\"User A no aparece en Tenant B\", () => pm.expect(ids).to.not.include(userAId));",
+                "const userBId = pm.collectionVariables.get(\"userBId\");",
+                "pm.test(\"User B sí aparece en Tenant B\", () => pm.expect(ids).to.include(userBId));"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "GET /users/:id User B desde Tenant A — debe devolver 404",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Tenant-ID", "value": "{{tenantId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userBId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "{{userBId}}"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test(\"Status 404 — User B no visible desde Tenant A\", () => pm.response.to.have.status(404));"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "PUT /users/:id User B desde Tenant A — debe devolver 404",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Tenant-ID", "value": "{{tenantId}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"INACTIVE\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userBId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "{{userBId}}"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test(\"Status 404 — no se puede modificar User B desde Tenant A\", () => pm.response.to.have.status(404));"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "PUT /users/:id User A desde Tenant B — debe devolver 404",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Tenant-ID", "value": "{{tenantBId}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"INACTIVE\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "{{userId}}"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test(\"Status 404 — no se puede modificar User A desde Tenant B\", () => pm.response.to.have.status(404));"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "DELETE /users/:id User B desde Tenant A — debe devolver 404",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Tenant-ID", "value": "{{tenantId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userBId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "{{userBId}}"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test(\"Status 404 — no se puede eliminar User B desde Tenant A\", () => pm.response.to.have.status(404));"
+              ]
+            }
+          }]
+        }
+      ]
+    },
+    {
+      "name": "8. Auth — Token Flows",
+      "item": [
+        {
+          "name": "GET /auth/validate",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/auth/validate",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "validate"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                "const j = pm.response.json();",
+                "pm.test(\"Token válido\", () => pm.expect(j.valid).to.be.true);",
+                "pm.test(\"Tiene user_id\", () => pm.expect(j.user_id).to.be.a(\"string\").and.not.be.empty);"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "POST /auth/refresh",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{refreshToken}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/refresh",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "refresh"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                "const j = pm.response.json();",
+                "pm.test(\"Nuevo access_token\", () => pm.expect(j.access_token).to.be.a(\"string\").and.not.be.empty);",
+                "pm.collectionVariables.set(\"token\", j.access_token);",
+                "pm.collectionVariables.set(\"refreshToken\", j.refresh_token);"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "POST /auth/revoke-all",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/auth/revoke-all",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "revoke-all"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                "pm.test(\"Mensaje presente\", () => pm.expect(pm.response.json().message).to.be.a(\"string\"));"
+              ]
+            }
+          }]
+        }
+      ]
+    },
+    {
+      "name": "9. Negative Cases",
+      "item": [
+        {
+          "name": "POST /auth/login — credenciales incorrectas → 401",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"WrongPassword999!\",\n  \"provider\": \"LOCAL\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test(\"Status 401\", () => pm.response.to.have.status(401));",
+                "pm.test(\"Tiene error\", () => pm.expect(pm.response.json().error).to.be.a(\"string\"));"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "GET /auth/validate — sin token → 401",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/validate",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "validate"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test(\"Status 401\", () => pm.response.to.have.status(401));"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "GET /users — sin X-Tenant-ID → 400",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["users"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test(\"Status 400 — X-Tenant-ID requerido\", () => pm.response.to.have.status(400));",
+                "pm.test(\"Mensaje de error\", () => pm.expect(pm.response.json().error).to.be.a(\"string\"));"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "GET /users/:id — ID inválido → 400",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/users/not-a-uuid",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "not-a-uuid"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test(\"Status 400 o 422\", () => { pm.expect(pm.response.code).to.be.oneOf([400, 422]); });"
+              ]
+            }
+          }]
+        }
+      ]
+    },
+    {
+      "name": "10. Cleanup",
+      "description": "Re-login (revoke-all invalida tokens previos). Luego eliminar en orden inverso de dependencias.",
+      "item": [
+        {
+          "name": "POST /auth/login — re-login para cleanup",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\",\n  \"provider\": \"LOCAL\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                "pm.collectionVariables.set(\"token\", pm.response.json().access_token);"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "DELETE /users/:id",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Tenant-ID", "value": "{{tenantId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "{{userId}}"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test(\"Status 204\", () => pm.response.to.have.status(204));"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "DELETE /users/:id User B (cleanup)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Tenant-ID", "value": "{{tenantBId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userBId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "{{userBId}}"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": ["pm.test(\"Status 204\", () => pm.response.to.have.status(204));"]
+            }
+          }]
+        },
+        {
+          "name": "DELETE /tenants/:id Tenant B (cleanup)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/tenants/{{tenantBId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["tenants", "{{tenantBId}}"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": ["pm.test(\"Status 204\", () => pm.response.to.have.status(204));"]
+            }
+          }]
+        },
+        {
+          "name": "DELETE /roles/:id",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/roles/{{roleId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["roles", "{{roleId}}"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test(\"Status 204\", () => pm.response.to.have.status(204));"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "DELETE /tenants/:id/plan — remover plan",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/tenants/{{tenantId}}/plan",
+              "host": ["{{baseUrl}}"],
+              "path": ["tenants", "{{tenantId}}", "plan"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "DELETE /tenants/:id",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/tenants/{{tenantId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["tenants", "{{tenantId}}"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test(\"Status 204\", () => pm.response.to.have.status(204));"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "POST /auth/logout",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "logout"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test(\"Status 204\", () => pm.response.to.have.status(204));",
+                "pm.collectionVariables.set(\"token\", \"\");",
+                "pm.collectionVariables.set(\"refreshToken\", \"\");"
+              ]
+            }
+          }]
+        }
+      ]
+    }
+  ]
+}

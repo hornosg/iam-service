@@ -42,6 +42,9 @@ coverage.out
 *.log
 logs/
 
+# Newman output
+newman-report.json
+
 # Build artifacts
 tmp/
 .cache/

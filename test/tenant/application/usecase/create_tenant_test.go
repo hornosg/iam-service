@@ -12,6 +12,7 @@ import (
 	"iam/src/tenant/application/usecase"
 	"iam/src/tenant/domain/entity"
 	"iam/src/tenant/domain/exception"
+	sharedmetrics "github.com/mercadocercano/go-shared/infrastructure/metrics"
 	tenantMother "iam/test/tenant/domain/entity"
 	"iam/test/tenant/infrastructure/persistence/repository"
 )
@@ -19,7 +20,7 @@ import (
 func TestCreateTenantUseCase_Execute_HappyPath_CreatesTenant(t *testing.T) {
 	// Arrange
 	mockRepo := repository.NewMockTenantRepository()
-	createUseCase := usecase.NewCreateTenantUseCase(mockRepo)
+	createUseCase := usecase.NewCreateTenantUseCase(mockRepo, sharedmetrics.NoopRecorder{})
 	ctx := context.Background()
 
 	ownerID := uuid.New()
@@ -50,7 +51,7 @@ func TestCreateTenantUseCase_Execute_HappyPath_CreatesTenant(t *testing.T) {
 func TestCreateTenantUseCase_Execute_SlugDuplicate_ReturnsError(t *testing.T) {
 	// Arrange
 	mockRepo := repository.NewMockTenantRepository()
-	createUseCase := usecase.NewCreateTenantUseCase(mockRepo)
+	createUseCase := usecase.NewCreateTenantUseCase(mockRepo, sharedmetrics.NoopRecorder{})
 	ctx := context.Background()
 
 	mother := tenantMother.Create()
@@ -78,7 +79,7 @@ func TestCreateTenantUseCase_Execute_SlugDuplicate_ReturnsError(t *testing.T) {
 func TestCreateTenantUseCase_Execute_DomainDuplicate_ReturnsError(t *testing.T) {
 	// Arrange
 	mockRepo := repository.NewMockTenantRepository()
-	createUseCase := usecase.NewCreateTenantUseCase(mockRepo)
+	createUseCase := usecase.NewCreateTenantUseCase(mockRepo, sharedmetrics.NoopRecorder{})
 	ctx := context.Background()
 
 	mother := tenantMother.Create()
@@ -107,7 +108,7 @@ func TestCreateTenantUseCase_Execute_DomainDuplicate_ReturnsError(t *testing.T) 
 func TestCreateTenantUseCase_Execute_InvalidType_ReturnsError(t *testing.T) {
 	// Arrange
 	mockRepo := repository.NewMockTenantRepository()
-	createUseCase := usecase.NewCreateTenantUseCase(mockRepo)
+	createUseCase := usecase.NewCreateTenantUseCase(mockRepo, sharedmetrics.NoopRecorder{})
 	ctx := context.Background()
 
 	ownerID := uuid.New()
@@ -131,7 +132,7 @@ func TestCreateTenantUseCase_Execute_InvalidType_ReturnsError(t *testing.T) {
 func TestCreateTenantUseCase_Execute_InvalidOwnerID_ReturnsError(t *testing.T) {
 	// Arrange
 	mockRepo := repository.NewMockTenantRepository()
-	createUseCase := usecase.NewCreateTenantUseCase(mockRepo)
+	createUseCase := usecase.NewCreateTenantUseCase(mockRepo, sharedmetrics.NoopRecorder{})
 	ctx := context.Background()
 
 	req := &request.CreateTenantRequest{
@@ -154,7 +155,7 @@ func TestCreateTenantUseCase_Execute_InvalidOwnerID_ReturnsError(t *testing.T) {
 func TestCreateTenantUseCase_Execute_WithDomain_SetsDomainCorrectly(t *testing.T) {
 	// Arrange
 	mockRepo := repository.NewMockTenantRepository()
-	createUseCase := usecase.NewCreateTenantUseCase(mockRepo)
+	createUseCase := usecase.NewCreateTenantUseCase(mockRepo, sharedmetrics.NoopRecorder{})
 	ctx := context.Background()
 
 	ownerID := uuid.New()
@@ -181,7 +182,7 @@ func TestCreateTenantUseCase_Execute_WithDomain_SetsDomainCorrectly(t *testing.T
 func TestCreateTenantUseCase_Execute_RepoCreateFails_ReturnsError(t *testing.T) {
 	// Arrange
 	mockRepo := repository.NewMockTenantRepository()
-	createUseCase := usecase.NewCreateTenantUseCase(mockRepo)
+	createUseCase := usecase.NewCreateTenantUseCase(mockRepo, sharedmetrics.NoopRecorder{})
 	ctx := context.Background()
 
 	mockRepo.ShouldFailOn("Create")

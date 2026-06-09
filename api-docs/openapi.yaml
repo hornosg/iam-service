@@ -32,7 +32,7 @@ components:
         type: integer
         minimum: 1
         default: 1
-    
+
     PageSizeParam:
       name: page_size
       in: query
@@ -43,7 +43,7 @@ components:
         minimum: 1
         maximum: 100
         default: 10
-    
+
     SortByParam:
       name: sort_by
       in: query
@@ -52,7 +52,7 @@ components:
       schema:
         type: string
         default: "created_at"
-    
+
     SortDirParam:
       name: sort_dir
       in: query
@@ -72,7 +72,7 @@ components:
       schema:
         type: string
         format: uuid
-    
+
     UserStatusParam:
       name: status
       in: query
@@ -81,7 +81,7 @@ components:
       schema:
         type: string
         enum: ["ACTIVE", "INACTIVE", "SUSPENDED", "DELETED"]
-    
+
     UserRoleIdParam:
       name: role_id
       in: query
@@ -90,7 +90,7 @@ components:
       schema:
         type: string
         format: uuid
-    
+
     UserEmailParam:
       name: email
       in: query
@@ -98,7 +98,7 @@ components:
       required: false
       schema:
         type: string
-    
+
     UserFirstNameParam:
       name: first_name
       in: query
@@ -106,7 +106,7 @@ components:
       required: false
       schema:
         type: string
-    
+
     UserLastNameParam:
       name: last_name
       in: query
@@ -114,7 +114,7 @@ components:
       required: false
       schema:
         type: string
-    
+
     UserProviderParam:
       name: provider
       in: query
@@ -132,8 +132,8 @@ components:
       required: false
       schema:
         type: string
-        enum: ["SYSTEM", "TENANT"]
-    
+        enum: ["SYSTEM_ADMIN", "TENANT_ADMIN", "USER", "READ_ONLY", "CUSTOM"]
+
     RoleNameParam:
       name: name
       in: query
@@ -141,7 +141,7 @@ components:
       required: false
       schema:
         type: string
-    
+
     RoleSystemParam:
       name: system
       in: query
@@ -150,7 +150,7 @@ components:
       schema:
         type: string
         enum: ["true"]
-    
+
     RoleActiveParam:
       name: active
       in: query
@@ -169,7 +169,7 @@ components:
       schema:
         type: string
         format: uuid
-    
+
     TenantTypeParam:
       name: type
       in: query
@@ -178,7 +178,7 @@ components:
       schema:
         type: string
         enum: ["PERSONAL", "STARTUP", "BUSINESS", "ENTERPRISE"]
-    
+
     TenantPlanIdParam:
       name: plan_id
       in: query
@@ -187,7 +187,7 @@ components:
       schema:
         type: string
         format: uuid
-    
+
     TenantNameParam:
       name: name
       in: query
@@ -195,7 +195,7 @@ components:
       required: false
       schema:
         type: string
-    
+
     TenantSlugParam:
       name: slug
       in: query
@@ -203,7 +203,7 @@ components:
       required: false
       schema:
         type: string
-    
+
     TenantDomainParam:
       name: domain
       in: query
@@ -211,7 +211,7 @@ components:
       required: false
       schema:
         type: string
-    
+
     TenantActiveParam:
       name: active
       in: query
@@ -229,8 +229,8 @@ components:
       required: false
       schema:
         type: string
-        enum: ["FREE", "STARTER", "PROFESSIONAL", "ENTERPRISE"]
-    
+        enum: ["FREE", "BASIC", "PREMIUM", "ENTERPRISE"]
+
     PlanCurrencyParam:
       name: currency
       in: query
@@ -238,7 +238,7 @@ components:
       required: false
       schema:
         type: string
-    
+
     PlanMinPriceParam:
       name: min_price
       in: query
@@ -247,7 +247,7 @@ components:
       schema:
         type: number
         format: float
-    
+
     PlanMaxPriceParam:
       name: max_price
       in: query
@@ -256,7 +256,7 @@ components:
       schema:
         type: number
         format: float
-    
+
     PlanActiveParam:
       name: active
       in: query
@@ -289,45 +289,79 @@ components:
 
     # Respuestas específicas usando ListResponse
     UserListResponse:
-      allOf:
-        - $ref: '#/components/schemas/ListResponse'
-        - type: object
-          properties:
-            items:
-              type: array
-              items:
-                $ref: '#/components/schemas/User'
+      type: object
+      properties:
+        users:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserResponse'
+        total_count:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+        total_pages:
+          type: integer
 
     RoleListResponse:
-      allOf:
-        - $ref: '#/components/schemas/ListResponse'
-        - type: object
-          properties:
-            items:
-              type: array
-              items:
-                $ref: '#/components/schemas/Role'
+      type: object
+      properties:
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoleResponse'
+        total_count:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
 
     TenantListResponse:
-      allOf:
-        - $ref: '#/components/schemas/ListResponse'
-        - type: object
+      type: object
+      properties:
+        tenants:
+          type: array
+          items:
+            $ref: '#/components/schemas/TenantResponse'
+        total_count:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+        pagination:
+          type: object
           properties:
-            items:
-              type: array
-              items:
-                $ref: '#/components/schemas/Tenant'
+            offset:
+              type: integer
+            limit:
+              type: integer
+            total:
+              type: integer
+            has_next:
+              type: boolean
+            has_prev:
+              type: boolean
+            total_pages:
+              type: integer
 
     PlanListResponse:
-      allOf:
-        - $ref: '#/components/schemas/ListResponse'
-        - type: object
-          properties:
-            items:
-              type: array
-              items:
-                $ref: '#/components/schemas/Plan'
+      type: object
+      properties:
+        plans:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlanResponse'
+        total_count:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
 
+    # Request/Response schemas
     LoginRequest:
       type: object
       required:
@@ -339,14 +373,17 @@ components:
           format: email
         password:
           type: string
+          description: Requerido si provider=LOCAL
         provider:
           type: string
           enum: [LOCAL, GOOGLE]
         google_token:
           type: string
+          description: Requerido si provider=GOOGLE
         tenant_id:
           type: string
           format: uuid
+          description: Opcional, para asociar login a un tenant
 
     LoginResponse:
       type: object
@@ -360,36 +397,83 @@ components:
         token_type:
           type: string
         user:
-          $ref: '#/components/schemas/User'
+          $ref: '#/components/schemas/UserData'
 
-    Plan:
+    UserData:
       type: object
       properties:
         id:
           type: string
           format: uuid
-        name:
+        email:
           type: string
-        description:
+          format: email
+        tenant_id:
           type: string
-        type:
+          format: uuid
+        role_id:
           type: string
-          enum: [FREE, STARTER, PROFESSIONAL, ENTERPRISE]
-        price:
-          type: number
-          format: float
-        currency:
-          type: string
-        features:
-          type: array
-          items:
-            type: string
-        limits:
-          type: object
-          additionalProperties: true
+          format: uuid
         status:
           type: string
-          enum: [ACTIVE, INACTIVE]
+          enum: [ACTIVE, INACTIVE, SUSPENDED, DELETED]
+
+    RefreshTokenRequest:
+      type: object
+      required:
+        - refresh_token
+      properties:
+        refresh_token:
+          type: string
+
+    ValidateTokenResponse:
+      type: object
+      properties:
+        valid:
+          type: boolean
+        user_id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        tenant_id:
+          type: string
+          format: uuid
+        role_id:
+          type: string
+          format: uuid
+
+    RevokeAllResponse:
+      type: object
+      properties:
+        message:
+          type: string
+
+    UserResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        tenant_id:
+          type: string
+          format: uuid
+        role_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE, SUSPENDED, DELETED]
+        provider:
+          type: string
+          enum: [LOCAL, GOOGLE]
+        federated_id:
+          type: string
+          description: ID externo para proveedores OAuth
         created_at:
           type: string
           format: date-time
@@ -397,30 +481,55 @@ components:
           type: string
           format: date-time
 
-    Tenant:
+    CreateUserRequest:
       type: object
       required:
-        - name
-        - slug
-        - type
-        - owner_id
+        - email
+        - tenant_id
+        - role_id
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          description: Requerido para usuarios con provider=LOCAL
+        tenant_id:
+          type: string
+          format: uuid
+        role_id:
+          type: string
+          format: uuid
+        provider:
+          type: string
+          enum: [LOCAL, GOOGLE]
+          default: LOCAL
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        role_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE, SUSPENDED, DELETED]
+
+    TenantResponse:
+      type: object
       properties:
         id:
           type: string
           format: uuid
         name:
           type: string
-          minLength: 2
-          maxLength: 100
         slug:
           type: string
-          pattern: '^[a-z0-9-]+$'
-          minLength: 2
-          maxLength: 50
         description:
           type: string
-          minLength: 5
-          maxLength: 500
         type:
           type: string
           enum: [PERSONAL, STARTUP, BUSINESS, ENTERPRISE]
@@ -432,39 +541,56 @@ components:
           format: uuid
         domain:
           type: string
-          format: hostname
         plan_id:
           type: string
           format: uuid
           nullable: true
-        user_count:
-          type: integer
-          minimum: 0
         max_users:
           type: integer
-          minimum: -1
+        user_count:
+          type: integer
         settings:
           type: object
           additionalProperties: true
+        features:
+          type: object
+          properties:
+            friends_family:
+              type: boolean
+            premium_analytics:
+              type: boolean
+        subscribed_at:
+          type: string
+          format: date-time
+          nullable: true
         expires_at:
           type: string
           format: date-time
           nullable: true
+        is_active:
+          type: boolean
+          readOnly: true
+        can_access:
+          type: boolean
+          readOnly: true
+        is_expired:
+          type: boolean
+          readOnly: true
+        can_add_user:
+          type: boolean
+          readOnly: true
+        has_plan:
+          type: boolean
+          readOnly: true
+        has_custom_domain:
+          type: boolean
+          readOnly: true
         created_at:
           type: string
           format: date-time
         updated_at:
           type: string
           format: date-time
-        is_active:
-          type: boolean
-          readOnly: true
-        can_add_users:
-          type: boolean
-          readOnly: true
-        has_custom_domain:
-          type: boolean
-          readOnly: true
 
     CreateTenantRequest:
       type: object
@@ -473,6 +599,7 @@ components:
         - slug
         - type
         - owner_id
+        - description
       properties:
         name:
           type: string
@@ -514,12 +641,9 @@ components:
         status:
           type: string
           enum: [ACTIVE, INACTIVE, SUSPENDED]
-        type:
-          type: string
-          enum: [PERSONAL, STARTUP, BUSINESS, ENTERPRISE]
-        settings:
-          type: object
-          additionalProperties: true
+        max_users:
+          type: integer
+          minimum: -1
 
     SetPlanRequest:
       type: object
@@ -530,49 +654,16 @@ components:
           type: string
           format: uuid
 
-    User:
+    UpdateTenantFeaturesRequest:
       type: object
-      required:
-        - email
-        - first_name
-        - last_name
-        - tenant_id
-        - role_id
       properties:
-        id:
-          type: string
-          format: uuid
-        email:
-          type: string
-          format: email
-        first_name:
-          type: string
-        last_name:
-          type: string
-        tenant_id:
-          type: string
-          format: uuid
-        role_id:
-          type: string
-          format: uuid
-        status:
-          type: string
-          enum: [ACTIVE, INACTIVE, SUSPENDED, DELETED]
-        provider:
-          type: string
-          enum: [LOCAL, GOOGLE]
-        created_at:
-          type: string
-          format: date-time
-        updated_at:
-          type: string
-          format: date-time
+        friends_family:
+          type: boolean
+        premium_analytics:
+          type: boolean
 
-    Role:
+    RoleResponse:
       type: object
-      required:
-        - name
-        - type
       properties:
         id:
           type: string
@@ -583,7 +674,7 @@ components:
           type: string
         type:
           type: string
-          enum: [SYSTEM, TENANT]
+          enum: [SYSTEM_ADMIN, TENANT_ADMIN, USER, READ_ONLY, CUSTOM]
         tenant_id:
           type: string
           format: uuid
@@ -592,9 +683,12 @@ components:
           type: array
           items:
             type: string
-        status:
-          type: string
-          enum: [ACTIVE, INACTIVE]
+        is_active:
+          type: boolean
+        is_system:
+          type: boolean
+        is_tenant:
+          type: boolean
         created_at:
           type: string
           format: date-time
@@ -602,10 +696,131 @@ components:
           type: string
           format: date-time
 
+    CreateRoleRequest:
+      type: object
+      required:
+        - name
+        - description
+        - type
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 100
+        description:
+          type: string
+          minLength: 5
+          maxLength: 500
+        type:
+          type: string
+          enum: [SYSTEM_ADMIN, TENANT_ADMIN, USER, READ_ONLY, CUSTOM]
+        tenant_id:
+          type: string
+          format: uuid
+          description: Requerido para roles de tenant
+        permissions:
+          type: array
+          items:
+            type: string
+
+    UpdateRoleRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 100
+        description:
+          type: string
+          minLength: 5
+          maxLength: 500
+        permissions:
+          type: array
+          items:
+            type: string
+
+    PlanResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        type:
+          type: string
+          enum: [FREE, BASIC, PREMIUM, ENTERPRISE]
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+        max_users:
+          type: integer
+        price_month:
+          type: number
+          format: float
+        price_year:
+          type: number
+          format: float
+        yearly_discount:
+          type: number
+          format: float
+        features:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreatePlanRequest:
+      type: object
+      required:
+        - name
+        - description
+        - type
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 100
+        description:
+          type: string
+          minLength: 10
+          maxLength: 500
+        type:
+          type: string
+          enum: [FREE, BASIC, PREMIUM, ENTERPRISE]
+        price_month:
+          type: number
+          format: float
+          minimum: 0
+        price_year:
+          type: number
+          format: float
+          minimum: 0
+        features:
+          type: array
+          items:
+            type: string
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        details:
+          type: string
+
 paths:
   /auth/login:
     post:
       summary: Iniciar sesión
+      description: Autentica un usuario con credenciales locales o token de Google
       tags: [Auth]
       requestBody:
         required: true
@@ -620,22 +835,36 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: Datos de entrada inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Credenciales inválidas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /auth/refresh:
     post:
       summary: Refrescar token de acceso
+      description: Genera un nuevo token de acceso usando el refresh token
       tags: [Auth]
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - refresh_token
-              properties:
-                refresh_token:
-                  type: string
+              $ref: '#/components/schemas/RefreshTokenRequest'
       responses:
         '200':
           description: Token refrescado exitosamente
@@ -643,339 +872,106 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: Datos de entrada inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Refresh token inválido o expirado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
-  /auth/logout:
-    post:
-      summary: Cerrar sesión
+  /auth/validate:
+    get:
+      summary: Validar token de acceso
+      description: Valida un token JWT y retorna sus claims
       tags: [Auth]
       security:
         - BearerAuth: []
       responses:
         '200':
+          description: Token válido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidateTokenResponse'
+        '401':
+          description: Token inválido o no proporcionado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/logout:
+    post:
+      summary: Cerrar sesión
+      description: Invalida todos los refresh tokens del usuario
+      tags: [Auth]
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
           description: Sesión cerrada exitosamente
-
-  /plans:
-    get:
-      summary: Listar planes con filtros y paginación
-      tags: [Plans]
-      parameters:
-        - $ref: '#/components/parameters/PageParam'
-        - $ref: '#/components/parameters/PageSizeParam'
-        - $ref: '#/components/parameters/SortByParam'
-        - $ref: '#/components/parameters/SortDirParam'
-        - $ref: '#/components/parameters/PlanTypeParam'
-        - $ref: '#/components/parameters/PlanCurrencyParam'
-        - $ref: '#/components/parameters/PlanMinPriceParam'
-        - $ref: '#/components/parameters/PlanMaxPriceParam'
-        - $ref: '#/components/parameters/PlanActiveParam'
-        - name: name
-          in: query
-          description: "Búsqueda por nombre (LIKE)"
-          required: false
-          schema:
-            type: string
-        - name: status
-          in: query
-          description: "Filtrar por estado"
-          required: false
-          schema:
-            type: string
-            enum: ["ACTIVE", "INACTIVE"]
-      responses:
-        '200':
-          description: Lista paginada de planes
+        '401':
+          description: Usuario no autenticado
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PlanListResponse'
-        '400':
-          description: Parámetros de filtrado inválidos
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
+  /auth/revoke-all:
     post:
-      summary: Crear nuevo plan
-      tags: [Plans]
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Plan'
-      responses:
-        '201':
-          description: Plan creado
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Plan'
-
-  /plans/{id}:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-    get:
-      summary: Obtener plan por ID
-      tags: [Plans]
+      summary: Revocar todos los tokens
+      description: Revoca todos los tokens activos para el usuario autenticado
+      tags: [Auth]
       security:
         - BearerAuth: []
       responses:
         '200':
-          description: Plan encontrado
+          description: Todos los tokens han sido revocados
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Plan'
-
-    put:
-      summary: Actualizar plan
-      tags: [Plans]
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Plan'
-      responses:
-        '200':
-          description: Plan actualizado
+                $ref: '#/components/schemas/RevokeAllResponse'
+        '401':
+          description: Usuario no autenticado
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Plan'
-
-    delete:
-      summary: Eliminar plan
-      tags: [Plans]
-      security:
-        - BearerAuth: []
-      responses:
-        '204':
-          description: Plan eliminado
-
-  /tenants:
-    post:
-      summary: Crear nuevo tenant
-      tags: [Tenants]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateTenantRequest'
-      responses:
-        '201':
-          description: Tenant creado exitosamente
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Tenant'
-        '400':
-          description: Datos de entrada inválidos
-        '409':
-          description: Slug o dominio ya existe
-
-    get:
-      summary: Listar tenants con filtros
-      tags: [Tenants]
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: page
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            default: 1
-        - name: page_size
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 10
-        - name: owner_id
-          in: query
-          description: Filtrar por propietario
-          schema:
-            type: string
-            format: uuid
-        - name: status
-          in: query
-          description: Filtrar por estado
-          schema:
-            type: string
-            enum: [ACTIVE, INACTIVE, SUSPENDED, DELETED]
-        - name: type
-          in: query
-          description: Filtrar por tipo
-          schema:
-            type: string
-            enum: [PERSONAL, STARTUP, BUSINESS, ENTERPRISE]
-        - name: active
-          in: query
-          description: Solo tenants activos
-          schema:
-            type: boolean
-        - name: expiring_days
-          in: query
-          description: Tenants que expiran en X días
-          schema:
-            type: integer
-            minimum: 0
-      responses:
-        '200':
-          description: Lista de tenants
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TenantListResponse'
-
-  /tenants/{id}:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-    get:
-      summary: Obtener tenant por ID
-      tags: [Tenants]
-      security:
-        - BearerAuth: []
-      responses:
-        '200':
-          description: Tenant encontrado
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Tenant'
-        '404':
-          description: Tenant no encontrado
-
-    put:
-      summary: Actualizar tenant
-      tags: [Tenants]
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpdateTenantRequest'
-      responses:
-        '200':
-          description: Tenant actualizado
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Tenant'
-        '400':
-          description: Datos de entrada inválidos
-        '403':
-          description: No se puede modificar tenant eliminado
-        '404':
-          description: Tenant no encontrado
-        '409':
-          description: Dominio ya existe
-
-    delete:
-      summary: Eliminar tenant (soft delete)
-      tags: [Tenants]
-      security:
-        - BearerAuth: []
-      responses:
-        '204':
-          description: Tenant eliminado
-        '403':
-          description: No se puede eliminar el tenant
-        '404':
-          description: Tenant no encontrado
-
-  /tenants/by-slug/{slug}:
-    parameters:
-      - name: slug
-        in: path
-        required: true
-        schema:
-          type: string
-          pattern: '^[a-z0-9-]+$'
-    get:
-      summary: Obtener tenant por slug
-      tags: [Tenants]
-      security:
-        - BearerAuth: []
-      responses:
-        '200':
-          description: Tenant encontrado
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Tenant'
-        '404':
-          description: Tenant no encontrado
-
-  /tenants/{id}/plan:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-    post:
-      summary: Asignar plan a tenant
-      tags: [Tenants]
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SetPlanRequest'
-      responses:
-        '200':
-          description: Plan asignado exitosamente
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Tenant'
-        '400':
-          description: Plan no válido
-        '403':
-          description: Tenant no activo o eliminado
-        '404':
-          description: Tenant no encontrado
-
-    delete:
-      summary: Remover plan del tenant
-      tags: [Tenants]
-      security:
-        - BearerAuth: []
-      responses:
-        '200':
-          description: Plan removido exitosamente
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Tenant'
-        '403':
-          description: Tenant eliminado
-        '404':
-          description: Tenant no encontrado
+                $ref: '#/components/schemas/ErrorResponse'
 
   /users:
     get:
       summary: Listar usuarios con filtros y paginación
+      description: Lista usuarios del tenant actual con filtros avanzados, ordenamiento y paginación
       tags: [Users]
       security:
         - BearerAuth: []
@@ -1001,13 +997,26 @@ paths:
                 $ref: '#/components/schemas/UserListResponse'
         '400':
           description: Parámetros de filtrado inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '401':
           description: No autorizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '403':
           description: Sin permisos para acceder a usuarios
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
     post:
       summary: Crear nuevo usuario
+      description: Crea un nuevo usuario en el tenant
       tags: [Users]
       security:
         - BearerAuth: []
@@ -1017,64 +1026,37 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/User'
+              $ref: '#/components/schemas/CreateUserRequest'
       responses:
         '201':
           description: Usuario creado
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/User'
-
-  /users/by-email:
-    get:
-      summary: Obtener usuario por email
-      tags: [Users]
-      security:
-        - BearerAuth: []
-        - tenantId: []
-      parameters:
-        - name: email
-          in: query
-          required: true
-          schema:
-            type: string
-            format: email
-      responses:
-        '200':
-          description: Usuario encontrado
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          description: Datos de entrada inválidos
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/User'
-
-  /users/by-tenant/{tenant_id}:
-    get:
-      summary: Obtener usuarios por tenant
-      tags: [Users]
-      security:
-        - BearerAuth: []
-        - tenantId: []
-      parameters:
-        - name: tenant_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: Lista de usuarios
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Usuario ya existe
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/User'
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /users/{id}:
     get:
       summary: Obtener usuario por ID
+      description: Obtiene un usuario específico por su ID
       tags: [Users]
       security:
         - BearerAuth: []
@@ -1092,10 +1074,81 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/User'
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          description: ID de usuario inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Usuario no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      summary: Actualizar usuario
+      description: Actualiza un usuario existente
+      tags: [Users]
+      security:
+        - BearerAuth: []
+        - tenantId: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: Usuario actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          description: Datos de entrada inválidos o estado inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Usuario no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Email ya está en uso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
     delete:
       summary: Eliminar usuario
+      description: Elimina un usuario (soft delete)
       tags: [Users]
       security:
         - BearerAuth: []
@@ -1110,10 +1163,405 @@ paths:
       responses:
         '204':
           description: Usuario eliminado
+        '400':
+          description: ID de usuario inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Usuario no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /tenants:
+    post:
+      summary: Crear nuevo tenant
+      description: Crea un nuevo tenant en el sistema
+      tags: [Tenants]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTenantRequest'
+      responses:
+        '201':
+          description: Tenant creado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        '400':
+          description: Datos de entrada inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Slug o dominio ya existe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      summary: Listar tenants con filtros
+      description: Lista tenants con filtros avanzados y paginación
+      tags: [Tenants]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+        - $ref: '#/components/parameters/SortByParam'
+        - $ref: '#/components/parameters/SortDirParam'
+        - $ref: '#/components/parameters/TenantOwnerIdParam'
+        - name: status
+          in: query
+          description: Filtrar por estado
+          schema:
+            type: string
+            enum: [ACTIVE, INACTIVE, SUSPENDED, DELETED]
+        - $ref: '#/components/parameters/TenantTypeParam'
+        - name: active
+          in: query
+          description: Solo tenants activos
+          schema:
+            type: boolean
+        - name: expiring_days
+          in: query
+          description: Tenants que expiran en X días
+          schema:
+            type: integer
+            minimum: 0
+        - $ref: '#/components/parameters/TenantNameParam'
+        - $ref: '#/components/parameters/TenantSlugParam'
+        - $ref: '#/components/parameters/TenantDomainParam'
+      responses:
+        '200':
+          description: Lista de tenants
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantListResponse'
+        '400':
+          description: Parámetros de filtrado inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /tenants/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      summary: Obtener tenant por ID
+      description: Obtiene un tenant específico por su ID
+      tags: [Tenants]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Tenant encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        '404':
+          description: Tenant no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      summary: Actualizar tenant
+      description: Actualiza un tenant existente
+      tags: [Tenants]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTenantRequest'
+      responses:
+        '200':
+          description: Tenant actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        '400':
+          description: Datos de entrada inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: No se puede modificar tenant eliminado o status inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Tenant no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Dominio ya existe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      summary: Eliminar tenant (soft delete)
+      description: Elimina un tenant (soft delete, marca como DELETED)
+      tags: [Tenants]
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: Tenant eliminado
+        '403':
+          description: No se puede eliminar el tenant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Tenant no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /tenants/by-slug/{slug}:
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: '^[a-z0-9-]+$'
+
+    get:
+      summary: Obtener tenant por slug
+      description: Obtiene un tenant específico por su slug
+      tags: [Tenants]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Tenant encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        '404':
+          description: Tenant no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /tenants/{id}/plan:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    post:
+      summary: Asignar plan a tenant
+      description: Asigna un plan de suscripción a un tenant
+      tags: [Tenants]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetPlanRequest'
+      responses:
+        '200':
+          description: Plan asignado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        '400':
+          description: Plan no válido o datos inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Tenant no activo, eliminado o no es activo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Tenant no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      summary: Remover plan del tenant
+      description: Remueve el plan de suscripción de un tenant
+      tags: [Tenants]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Plan removido exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        '403':
+          description: Tenant eliminado o no se puede modificar
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Tenant no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /tenants/{id}/features:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    patch:
+      summary: Actualizar características del tenant
+      description: Actualiza las características específicas de un tenant (friends_family, premium_analytics)
+      tags: [Tenants]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTenantFeaturesRequest'
+      responses:
+        '200':
+          description: Características actualizadas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        '400':
+          description: Datos de entrada inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Tenant eliminado o no se puede modificar
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Tenant no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /roles:
     post:
       summary: Crear nuevo rol
+      description: Crea un nuevo rol en el sistema o tenant
       tags: [Roles]
       security:
         - BearerAuth: []
@@ -1122,17 +1570,36 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Role'
+              $ref: '#/components/schemas/CreateRoleRequest'
       responses:
         '201':
           description: Rol creado
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Role'
+                $ref: '#/components/schemas/RoleResponse'
+        '400':
+          description: Datos de entrada inválidos o tipo de rol inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Rol ya existe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
     get:
       summary: Listar roles con filtros y paginación
+      description: Lista roles con filtros avanzados, ordenamiento y paginación
       tags: [Roles]
       security:
         - BearerAuth: []
@@ -1162,70 +1629,269 @@ paths:
                 $ref: '#/components/schemas/RoleListResponse'
         '400':
           description: Parámetros de filtrado inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '401':
           description: No autorizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '403':
           description: Sin permisos para acceder a roles
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /roles/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
     get:
       summary: Obtener rol por ID
+      description: Obtiene un rol específico por su ID
       tags: [Roles]
       security:
         - BearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
       responses:
         '200':
           description: Rol encontrado
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Role'
+                $ref: '#/components/schemas/RoleResponse'
+        '400':
+          description: ID de rol inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Rol no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
     put:
       summary: Actualizar rol
+      description: Actualiza un rol existente (no se pueden modificar roles de sistema)
       tags: [Roles]
       security:
         - BearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Role'
+              $ref: '#/components/schemas/UpdateRoleRequest'
       responses:
         '200':
           description: Rol actualizado
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Role'
+                $ref: '#/components/schemas/RoleResponse'
+        '400':
+          description: Datos de entrada inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: No se puede modificar rol de sistema
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Rol no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
     delete:
       summary: Eliminar rol
+      description: Elimina un rol (no se pueden eliminar roles de sistema)
       tags: [Roles]
       security:
         - BearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
       responses:
         '204':
           description: Rol eliminado
+        '400':
+          description: ID de rol inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: No se puede eliminar rol de sistema
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Rol no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /plans:
+    post:
+      summary: Crear nuevo plan
+      description: Crea un nuevo plan de suscripción en el sistema
+      tags: [Plans]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePlanRequest'
+      responses:
+        '201':
+          description: Plan creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanResponse'
+        '400':
+          description: Datos de entrada inválidos o tipo de plan inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Plan ya existe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      summary: Listar planes con filtros y paginación
+      description: Lista planes con filtros avanzados, ordenamiento y paginación
+      tags: [Plans]
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+        - $ref: '#/components/parameters/SortByParam'
+        - $ref: '#/components/parameters/SortDirParam'
+        - $ref: '#/components/parameters/PlanTypeParam'
+        - name: name
+          in: query
+          description: "Búsqueda por nombre (LIKE)"
+          required: false
+          schema:
+            type: string
+        - name: status
+          in: query
+          description: "Filtrar por estado"
+          required: false
+          schema:
+            type: string
+            enum: ["ACTIVE", "INACTIVE"]
+        - $ref: '#/components/parameters/PlanCurrencyParam'
+        - $ref: '#/components/parameters/PlanMinPriceParam'
+        - $ref: '#/components/parameters/PlanMaxPriceParam'
+        - $ref: '#/components/parameters/PlanActiveParam'
+      responses:
+        '200':
+          description: Lista paginada de planes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanListResponse'
+        '400':
+          description: Parámetros de filtrado inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /plans/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      summary: Obtener plan por ID
+      description: Obtiene un plan específico por su ID
+      tags: [Plans]
+      responses:
+        '200':
+          description: Plan encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanResponse'
+        '400':
+          description: ID de plan inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Plan no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'

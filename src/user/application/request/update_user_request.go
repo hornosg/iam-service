@@ -7,7 +7,7 @@ import (
 )
 
 type UpdateUserRequest struct {
-	ID     uuid.UUID                `json:"id" binding:"required"`
+	ID     uuid.UUID                `json:"id" binding:"-"`
 	Email  *string                  `json:"email,omitempty"`
 	RoleID *uuid.UUID               `json:"role_id,omitempty"`
 	Status *value_object.UserStatus `json:"status,omitempty"`

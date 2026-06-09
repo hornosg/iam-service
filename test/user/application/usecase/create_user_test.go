@@ -10,8 +10,8 @@ import (
 
 	"iam/src/user/application/request"
 	"iam/src/user/application/usecase"
-	"iam/src/user/domain/exception"
 	"iam/src/user/domain/entity"
+	"iam/src/user/domain/exception"
 	"iam/src/user/domain/value_object"
 	userMother "iam/test/user/domain/entity"
 	"iam/test/user/infrastructure/persistence/repository"

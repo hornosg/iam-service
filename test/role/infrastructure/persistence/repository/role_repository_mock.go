@@ -13,8 +13,8 @@ import (
 
 // Errores mock
 var (
-	ErrMockFailedOp      = errors.New("operacion fallida (simulada)")
-	ErrMockRoleNotFound  = errors.New("rol no encontrado (simulado)")
+	ErrMockFailedOp       = errors.New("operacion fallida (simulada)")
+	ErrMockRoleNotFound   = errors.New("rol no encontrado (simulado)")
 	ErrMockRoleDuplicated = errors.New("rol duplicado (simulado)")
 )
 

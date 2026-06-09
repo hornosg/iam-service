@@ -1,25 +1,23 @@
 package value_object
 
 import (
-	tenant_vo "iam/src/tenant/domain/value_object"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
 
 type TokenClaims struct {
-	JTI       uuid.UUID                 `json:"jti"`
-	Issuer    string                    `json:"iss"`
-	UserID    uuid.UUID                 `json:"user_id"`
-	Email     string                    `json:"email"`
-	TenantID  uuid.UUID                 `json:"tenant_id"`
-	RoleID    uuid.UUID                 `json:"role_id"`
-	Features  *tenant_vo.TenantFeatures `json:"features"`
-	ExpiresAt int64                     `json:"exp"`
+	JTI       uuid.UUID       `json:"jti"`
+	Issuer    string          `json:"iss"`
+	UserID    uuid.UUID       `json:"user_id"`
+	Email     string          `json:"email"`
+	TenantID  uuid.UUID       `json:"tenant_id"`
+	RoleID    uuid.UUID       `json:"role_id"`
+	Features  *TenantFeatures `json:"features"`
+	ExpiresAt int64           `json:"exp"`
 }
 
-func NewTokenClaims(userID, tenantID, roleID uuid.UUID, email string, features *tenant_vo.TenantFeatures, expiresAt time.Time) *TokenClaims {
+func NewTokenClaims(userID, tenantID, roleID uuid.UUID, email string, features *TenantFeatures, expiresAt time.Time) *TokenClaims {
 	return &TokenClaims{
 		JTI:       uuid.New(),
 		Issuer:    "iam-service",
@@ -34,35 +32,4 @@ func NewTokenClaims(userID, tenantID, roleID uuid.UUID, email string, features *
 
 func (c TokenClaims) GetJTI() uuid.UUID {
 	return c.JTI
-}
-
-func (c TokenClaims) GetExpirationTime() (*jwt.NumericDate, error) {
-	if c.ExpiresAt == 0 {
-		return nil, nil
-	}
-	return jwt.NewNumericDate(time.Unix(c.ExpiresAt, 0)), nil
-}
-
-func (c TokenClaims) GetIssuedAt() (*jwt.NumericDate, error) {
-	return nil, nil
-}
-
-func (c TokenClaims) GetNotBefore() (*jwt.NumericDate, error) {
-	return nil, nil
-}
-
-func (c TokenClaims) GetIssuer() (string, error) {
-	return c.Issuer, nil
-}
-
-func (c TokenClaims) GetSubject() (string, error) {
-	return c.Email, nil
-}
-
-func (c TokenClaims) GetAudience() (jwt.ClaimStrings, error) {
-	return nil, nil
-}
-
-func (c TokenClaims) GetID() (string, error) {
-	return c.JTI.String(), nil
 }

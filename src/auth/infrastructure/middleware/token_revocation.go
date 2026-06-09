@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 
 	"iam/src/auth/domain/port"
-	"iam/src/auth/domain/value_object"
+	"iam/src/auth/infrastructure/adapter"
 )
 
 type TokenRevocationConfig struct {
@@ -39,8 +39,8 @@ func TokenRevocationCheck(cfg TokenRevocationConfig) gin.HandlerFunc {
 			return
 		}
 
-		claims := &value_object.TokenClaims{}
-		token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
+		jwtClaims := &adapter.JWTClaims{}
+		token, err := jwt.ParseWithClaims(tokenStr, jwtClaims, func(token *jwt.Token) (interface{}, error) {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, jwt.ErrSignatureInvalid
 			}
@@ -52,6 +52,7 @@ func TokenRevocationCheck(cfg TokenRevocationConfig) gin.HandlerFunc {
 			return
 		}
 
+		claims := &jwtClaims.TokenClaims
 		c.Set("user_id", claims.UserID)
 		c.Set("token_claims", claims)
 

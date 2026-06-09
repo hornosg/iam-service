@@ -8,6 +8,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/lib/pq v1.10.9
 	github.com/mercadocercano/criteria v0.3.0
+	github.com/mercadocercano/go-shared v0.1.0
 	github.com/mercadocercano/middleware v0.1.0
 	github.com/prometheus/client_golang v1.22.0
 	github.com/stretchr/testify v1.11.1

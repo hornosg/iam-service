@@ -7,20 +7,20 @@ import (
 	"github.com/google/uuid"
 
 	"iam/src/auth/domain/port"
-	"iam/src/auth/infrastructure/logging"
+	sharedport "github.com/mercadocercano/go-shared/domain/port"
 )
 
 type RevokeAllUseCase struct {
 	authRepo          port.AuthRepository
 	accessTokenExpiry time.Duration
-	securityLogger    *logging.SecurityLogger
+	securityLogger    sharedport.SecurityEventLogger
 }
 
-func NewRevokeAllUseCase(authRepo port.AuthRepository, accessTokenExpiry time.Duration) *RevokeAllUseCase {
+func NewRevokeAllUseCase(authRepo port.AuthRepository, accessTokenExpiry time.Duration, securityLogger sharedport.SecurityEventLogger) *RevokeAllUseCase {
 	return &RevokeAllUseCase{
 		authRepo:          authRepo,
 		accessTokenExpiry: accessTokenExpiry,
-		securityLogger:    logging.NewSecurityLogger(),
+		securityLogger:    securityLogger,
 	}
 }
 
@@ -31,7 +31,11 @@ func (uc *RevokeAllUseCase) Execute(ctx context.Context, userID uuid.UUID) error
 		return err
 	}
 
-	uc.securityLogger.LogTokenRevoked(userID.String(), "", "", "all")
+	uc.securityLogger.Log(sharedport.SecurityEvent{
+		Event:  sharedport.EventTokenRevoked,
+		UserID: userID.String(),
+		Scope:  "all",
+	})
 
 	return uc.authRepo.DeleteAllUserRefreshTokens(ctx, userID)
 }

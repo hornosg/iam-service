@@ -316,7 +316,7 @@ func (r *PostgresUserRepository) scanUser(row *sql.Row) (*entity.User, error) {
 
 // scanUsers mapea múltiples filas a entidades User
 func (r *PostgresUserRepository) scanUsers(rows *sql.Rows) ([]*entity.User, error) {
-	var users []*entity.User
+	users := make([]*entity.User, 0)
 
 	for rows.Next() {
 		var emailStr, statusStr string

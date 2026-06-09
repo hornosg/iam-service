@@ -1,0 +1,31 @@
+{
+  "id": "iam-local-env",
+  "name": "IAM — Local",
+  "_postman_variable_scope": "environment",
+  "values": [
+    {
+      "key": "hostUrl",
+      "value": "http://localhost:8080",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080/api/v1",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "adminEmail",
+      "value": "admin@saasadmin.com",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "adminPassword",
+      "value": "123456",
+      "type": "secret",
+      "enabled": true
+    }
+  ]
+}

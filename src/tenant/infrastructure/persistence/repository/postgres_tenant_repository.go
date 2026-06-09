@@ -10,11 +10,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 
+	"github.com/mercadocercano/criteria"
 	"iam/src/tenant/domain/entity"
 	"iam/src/tenant/domain/exception"
 	"iam/src/tenant/domain/port"
 	"iam/src/tenant/domain/value_object"
-	"github.com/mercadocercano/criteria"
 )
 
 type PostgresTenantRepository struct {
@@ -50,6 +50,8 @@ func (r *PostgresTenantRepository) Create(ctx context.Context, tenant *entity.Te
 		return fmt.Errorf("error marshaling features: %w", err)
 	}
 
+	domainVal := sql.NullString{String: tenant.Domain, Valid: tenant.Domain != ""}
+
 	_, err = r.db.ExecContext(ctx, query,
 		tenant.ID,
 		tenant.Name,
@@ -58,7 +60,7 @@ func (r *PostgresTenantRepository) Create(ctx context.Context, tenant *entity.Te
 		tenant.Type.String(),
 		tenant.Status.String(),
 		tenant.OwnerID,
-		tenant.Domain,
+		domainVal,
 		tenant.PlanID,
 		tenant.UserCount,
 		tenant.MaxUsers,
@@ -149,13 +151,15 @@ func (r *PostgresTenantRepository) Update(ctx context.Context, tenant *entity.Te
 		return fmt.Errorf("error marshaling features: %w", err)
 	}
 
+	domainUpdateVal := sql.NullString{String: tenant.Domain, Valid: tenant.Domain != ""}
+
 	result, err := r.db.ExecContext(ctx, query,
 		tenant.ID,
 		tenant.Name,
 		tenant.Description,
 		tenant.Type.String(),
 		tenant.Status.String(),
-		tenant.Domain,
+		domainUpdateVal,
 		tenant.PlanID,
 		tenant.UserCount,
 		tenant.MaxUsers,
@@ -525,7 +529,7 @@ func (r *PostgresTenantRepository) scanTenant(row *sql.Row) (*entity.Tenant, err
 
 // scanTenants escanea múltiples filas en entidades Tenant
 func (r *PostgresTenantRepository) scanTenants(rows *sql.Rows) ([]*entity.Tenant, error) {
-	var tenants []*entity.Tenant
+	tenants := make([]*entity.Tenant, 0)
 
 	for rows.Next() {
 		var tenant entity.Tenant

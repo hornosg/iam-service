@@ -13,16 +13,16 @@ import (
 )
 
 type TenantHandler struct {
-	createTenantUseCase         *usecase.CreateTenantUseCase
-	getTenantByIDUseCase        *usecase.GetTenantByIDUseCase
-	getTenantBySlugUseCase      *usecase.GetTenantBySlugUseCase
-	updateTenantUseCase         *usecase.UpdateTenantUseCase
-	deleteTenantUseCase         *usecase.DeleteTenantUseCase
-	listTenantsUseCase          *usecase.ListTenantsUseCase
+	createTenantUseCase          *usecase.CreateTenantUseCase
+	getTenantByIDUseCase         *usecase.GetTenantByIDUseCase
+	getTenantBySlugUseCase       *usecase.GetTenantBySlugUseCase
+	updateTenantUseCase          *usecase.UpdateTenantUseCase
+	deleteTenantUseCase          *usecase.DeleteTenantUseCase
+	listTenantsUseCase           *usecase.ListTenantsUseCase
 	listTenantsByCriteriaUseCase *usecase.ListTenantsByCriteriaUseCase
-	setPlanUseCase              *usecase.SetPlanUseCase
-	updateTenantFeaturesUseCase *usecase.UpdateTenantFeaturesUseCase
-	criteriaBuilder             *criteria.TenantCriteriaBuilder
+	setPlanUseCase               *usecase.SetPlanUseCase
+	updateTenantFeaturesUseCase  *usecase.UpdateTenantFeaturesUseCase
+	criteriaBuilder              *criteria.TenantCriteriaBuilder
 }
 
 func NewTenantHandler(
@@ -38,16 +38,16 @@ func NewTenantHandler(
 	criteriaBuilder *criteria.TenantCriteriaBuilder,
 ) *TenantHandler {
 	return &TenantHandler{
-		createTenantUseCase:         createTenantUseCase,
-		getTenantByIDUseCase:        getTenantByIDUseCase,
-		getTenantBySlugUseCase:      getTenantBySlugUseCase,
-		updateTenantUseCase:         updateTenantUseCase,
-		deleteTenantUseCase:         deleteTenantUseCase,
-		listTenantsUseCase:          listTenantsUseCase,
+		createTenantUseCase:          createTenantUseCase,
+		getTenantByIDUseCase:         getTenantByIDUseCase,
+		getTenantBySlugUseCase:       getTenantBySlugUseCase,
+		updateTenantUseCase:          updateTenantUseCase,
+		deleteTenantUseCase:          deleteTenantUseCase,
+		listTenantsUseCase:           listTenantsUseCase,
 		listTenantsByCriteriaUseCase: listTenantsByCriteriaUseCase,
-		setPlanUseCase:              setPlanUseCase,
-		updateTenantFeaturesUseCase: updateTenantFeaturesUseCase,
-		criteriaBuilder:             criteriaBuilder,
+		setPlanUseCase:               setPlanUseCase,
+		updateTenantFeaturesUseCase:  updateTenantFeaturesUseCase,
+		criteriaBuilder:              criteriaBuilder,
 	}
 }
 

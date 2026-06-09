@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	sharedport "github.com/mercadocercano/go-shared/domain/port"
 	"iam/src/tenant/application/usecase"
 	"iam/src/tenant/infrastructure/controller"
 	"iam/src/tenant/infrastructure/criteria"
@@ -12,12 +13,12 @@ import (
 )
 
 // SetupTenantModule configura e inicializa el módulo de tenants y retorna el caso de uso para obtener features
-func SetupTenantModule(apiGroup *gin.RouterGroup, db *sql.DB) *usecase.GetTenantFeaturesUseCase {
+func SetupTenantModule(apiGroup *gin.RouterGroup, db *sql.DB, metricsRecorder sharedport.MetricsRecorder) *usecase.GetTenantFeaturesUseCase {
 	// Crear repositorio PostgreSQL
 	tenantRepo := repository.NewPostgresTenantRepository(db)
 
 	// Crear casos de uso
-	createTenantUseCase := usecase.NewCreateTenantUseCase(tenantRepo)
+	createTenantUseCase := usecase.NewCreateTenantUseCase(tenantRepo, metricsRecorder)
 	getTenantByIDUseCase := usecase.NewGetTenantByIDUseCase(tenantRepo)
 	getTenantBySlugUseCase := usecase.NewGetTenantBySlugUseCase(tenantRepo)
 	updateTenantUseCase := usecase.NewUpdateTenantUseCase(tenantRepo)

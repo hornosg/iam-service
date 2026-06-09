@@ -3,21 +3,23 @@ package usecase
 import (
 	"context"
 
-	"iam/src/api/monitoring"
 	"iam/src/tenant/application/request"
 	"iam/src/tenant/application/response"
 	"iam/src/tenant/domain/entity"
 	"iam/src/tenant/domain/exception"
 	"iam/src/tenant/domain/port"
+	sharedport "github.com/mercadocercano/go-shared/domain/port"
 )
 
 type CreateTenantUseCase struct {
 	tenantRepo port.TenantRepository
+	metrics    sharedport.MetricsRecorder
 }
 
-func NewCreateTenantUseCase(tenantRepo port.TenantRepository) *CreateTenantUseCase {
+func NewCreateTenantUseCase(tenantRepo port.TenantRepository, metrics sharedport.MetricsRecorder) *CreateTenantUseCase {
 	return &CreateTenantUseCase{
 		tenantRepo: tenantRepo,
+		metrics:    metrics,
 	}
 }
 
@@ -68,17 +70,25 @@ func (uc *CreateTenantUseCase) Execute(ctx context.Context, req *request.CreateT
 
 	// Guardar en repositorio
 	if err := uc.tenantRepo.Create(ctx, tenant); err != nil {
-		// Registrar métrica de fallo
-		monitoring.RecordTenantCreated("unknown", "failed")
+		uc.metrics.Record(sharedport.MetricEvent{
+			Name:   port.MetricTenantCreated,
+			Kind:   sharedport.MetricKindCounter,
+			Labels: map[string]string{"plan_id": "unknown", "status": "failed"},
+			Value:  1,
+		})
 		return nil, err
 	}
 
-	// Registrar métrica de éxito
-	planID := "none" // Valor por defecto para tenants sin plan
+	planID := "none"
 	if tenant.HasPlan() {
 		planID = tenant.PlanID.String()
 	}
-	monitoring.RecordTenantCreated(planID, "success")
+	uc.metrics.Record(sharedport.MetricEvent{
+		Name:   port.MetricTenantCreated,
+		Kind:   sharedport.MetricKindCounter,
+		Labels: map[string]string{"plan_id": planID, "status": "success"},
+		Value:  1,
+	})
 
 	return response.NewTenantResponse(tenant), nil
 }

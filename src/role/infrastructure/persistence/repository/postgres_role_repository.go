@@ -9,11 +9,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 
+	"github.com/mercadocercano/criteria"
 	"iam/src/role/domain/entity"
 	"iam/src/role/domain/exception"
 	"iam/src/role/domain/port"
 	"iam/src/role/domain/value_object"
-	"github.com/mercadocercano/criteria"
 )
 
 type PostgresRoleRepository struct {
@@ -352,7 +352,7 @@ func (r *PostgresRoleRepository) scanRole(row *sql.Row) (*entity.Role, error) {
 
 // scanRoles mapea múltiples filas a entidades Role
 func (r *PostgresRoleRepository) scanRoles(rows *sql.Rows) ([]*entity.Role, error) {
-	var roles []*entity.Role
+	roles := make([]*entity.Role, 0)
 
 	for rows.Next() {
 		var typeStr string

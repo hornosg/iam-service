@@ -11,7 +11,8 @@ import (
 	"iam/src/auth/application/usecase"
 	"iam/src/auth/domain/entity"
 	"iam/src/auth/domain/port"
-	tenant_vo "iam/src/tenant/domain/value_object"
+	auth_vo "iam/src/auth/domain/value_object"
+	"iam/src/auth/infrastructure/adapter"
 	authEntity "iam/test/auth/domain/entity"
 	"iam/test/auth/infrastructure/persistence/repository"
 )
@@ -71,14 +72,14 @@ func (m *MockUserService) FindUserByEmail(ctx context.Context, email string, ten
 
 // MockTenantService implementa port.TenantService para pruebas
 type MockTenantService struct {
-	features    *tenant_vo.TenantFeatures
+	features    *auth_vo.TenantFeatures
 	shouldFail  bool
 	callHistory map[string]int
 }
 
 func NewMockTenantService() *MockTenantService {
 	return &MockTenantService{
-		features: &tenant_vo.TenantFeatures{
+		features: &auth_vo.TenantFeatures{
 			FriendsFamily:    true,
 			PremiumAnalytics: false,
 		},
@@ -86,7 +87,7 @@ func NewMockTenantService() *MockTenantService {
 	}
 }
 
-func (m *MockTenantService) SetFeatures(features *tenant_vo.TenantFeatures) {
+func (m *MockTenantService) SetFeatures(features *auth_vo.TenantFeatures) {
 	m.features = features
 }
 
@@ -98,7 +99,7 @@ func (m *MockTenantService) GetCallCount(method string) int {
 	return m.callHistory[method]
 }
 
-func (m *MockTenantService) Execute(ctx context.Context, tenantID uuid.UUID) (*tenant_vo.TenantFeatures, error) {
+func (m *MockTenantService) Execute(ctx context.Context, tenantID uuid.UUID) (*auth_vo.TenantFeatures, error) {
 	m.callHistory["Execute"]++
 	if m.shouldFail {
 		return nil, assert.AnError
@@ -117,16 +118,17 @@ func TestRefreshTokenUseCase_Execute(t *testing.T) {
 		mockTenantService := NewMockTenantService()
 
 		config := usecase.AuthConfig{
-			JWTSecret:          "test-secret",
 			AccessTokenExpiry:  15 * time.Minute,
 			RefreshTokenExpiry: 7 * 24 * time.Hour,
 		}
+		jwtSvc := adapter.NewJWTServiceAdapter("test-secret")
 
 		refreshTokenUseCase := usecase.NewRefreshTokenUseCase(
 			config,
 			mockAuthRepo,
 			mockUserService,
 			mockTenantService,
+			jwtSvc,
 		)
 
 		userID := uuid.New()
@@ -174,16 +176,17 @@ func TestRefreshTokenUseCase_Execute(t *testing.T) {
 		mockTenantService := NewMockTenantService()
 
 		config := usecase.AuthConfig{
-			JWTSecret:          "test-secret",
 			AccessTokenExpiry:  15 * time.Minute,
 			RefreshTokenExpiry: 7 * 24 * time.Hour,
 		}
+		jwtSvc := adapter.NewJWTServiceAdapter("test-secret")
 
 		refreshTokenUseCase := usecase.NewRefreshTokenUseCase(
 			config,
 			mockAuthRepo,
 			mockUserService,
 			mockTenantService,
+			jwtSvc,
 		)
 
 		// Act
@@ -204,16 +207,17 @@ func TestRefreshTokenUseCase_Execute(t *testing.T) {
 		mockTenantService := NewMockTenantService()
 
 		config := usecase.AuthConfig{
-			JWTSecret:          "test-secret",
 			AccessTokenExpiry:  15 * time.Minute,
 			RefreshTokenExpiry: 7 * 24 * time.Hour,
 		}
+		jwtSvc := adapter.NewJWTServiceAdapter("test-secret")
 
 		refreshTokenUseCase := usecase.NewRefreshTokenUseCase(
 			config,
 			mockAuthRepo,
 			mockUserService,
 			mockTenantService,
+			jwtSvc,
 		)
 
 		userID := uuid.New()
@@ -242,16 +246,17 @@ func TestRefreshTokenUseCase_Execute(t *testing.T) {
 		mockTenantService := NewMockTenantService()
 
 		config := usecase.AuthConfig{
-			JWTSecret:          "test-secret",
 			AccessTokenExpiry:  15 * time.Minute,
 			RefreshTokenExpiry: 7 * 24 * time.Hour,
 		}
+		jwtSvc := adapter.NewJWTServiceAdapter("test-secret")
 
 		refreshTokenUseCase := usecase.NewRefreshTokenUseCase(
 			config,
 			mockAuthRepo,
 			mockUserService,
 			mockTenantService,
+			jwtSvc,
 		)
 
 		userID := uuid.New()
@@ -279,16 +284,17 @@ func TestRefreshTokenUseCase_Execute(t *testing.T) {
 		mockTenantService := NewMockTenantService()
 
 		config := usecase.AuthConfig{
-			JWTSecret:          "test-secret",
 			AccessTokenExpiry:  15 * time.Minute,
 			RefreshTokenExpiry: 7 * 24 * time.Hour,
 		}
+		jwtSvc := adapter.NewJWTServiceAdapter("test-secret")
 
 		refreshTokenUseCase := usecase.NewRefreshTokenUseCase(
 			config,
 			mockAuthRepo,
 			mockUserService,
 			mockTenantService,
+			jwtSvc,
 		)
 
 		mockAuthRepo.ShouldFailOn("GetRefreshToken")
@@ -311,16 +317,17 @@ func TestRefreshTokenUseCase_Execute(t *testing.T) {
 		mockTenantService := NewMockTenantService()
 
 		config := usecase.AuthConfig{
-			JWTSecret:          "test-secret",
 			AccessTokenExpiry:  15 * time.Minute,
 			RefreshTokenExpiry: 7 * 24 * time.Hour,
 		}
+		jwtSvc := adapter.NewJWTServiceAdapter("test-secret")
 
 		refreshTokenUseCase := usecase.NewRefreshTokenUseCase(
 			config,
 			mockAuthRepo,
 			mockUserService,
 			mockTenantService,
+			jwtSvc,
 		)
 
 		mockAuthRepo.ShouldFailOn("CreateRefreshToken")
@@ -361,16 +368,17 @@ func TestRefreshTokenUseCase_Execute(t *testing.T) {
 		mockTenantService := NewMockTenantService()
 
 		config := usecase.AuthConfig{
-			JWTSecret:          "test-secret",
 			AccessTokenExpiry:  15 * time.Minute,
 			RefreshTokenExpiry: 7 * 24 * time.Hour,
 		}
+		jwtSvc := adapter.NewJWTServiceAdapter("test-secret")
 
 		refreshTokenUseCase := usecase.NewRefreshTokenUseCase(
 			config,
 			mockAuthRepo,
 			mockUserService,
 			mockTenantService,
+			jwtSvc,
 		)
 
 		mockTenantService.SetShouldFail(true)

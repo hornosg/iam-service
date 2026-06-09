@@ -1,0 +1,23 @@
+version: '3.8'
+
+# Docker Compose para e2e Newman — Postgres limpio por run, puerto 5433 (no conflicta con dev)
+
+services:
+  postgres-e2e:
+    image: postgres:15-alpine
+    container_name: mc-postgres-e2e
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: iam_e2e
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    tmpfs:
+      - /var/lib/postgresql/data

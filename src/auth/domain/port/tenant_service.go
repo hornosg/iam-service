@@ -2,12 +2,15 @@ package port
 
 import (
 	"context"
-	tenant_vo "iam/src/tenant/domain/value_object"
 
 	"github.com/google/uuid"
+
+	"iam/src/auth/domain/value_object"
 )
 
-// TenantService define la interfaz para obtener información del tenant
+// TenantService is the port auth uses to fetch tenant feature flags for JWT generation.
+// It returns auth's own TenantFeatures type — not the tenant module's type.
+// The conversion is handled by the infrastructure adapter (auth/infrastructure/adapter).
 type TenantService interface {
-	Execute(ctx context.Context, tenantID uuid.UUID) (*tenant_vo.TenantFeatures, error)
+	Execute(ctx context.Context, tenantID uuid.UUID) (*value_object.TenantFeatures, error)
 }

@@ -13,13 +13,13 @@ import (
 )
 
 type RoleHandler struct {
-	createRoleUseCase  *usecase.CreateRoleUseCase
-	getRoleByIDUseCase *usecase.GetRoleByIDUseCase
-	updateRoleUseCase  *usecase.UpdateRoleUseCase
-	deleteRoleUseCase  *usecase.DeleteRoleUseCase
-	listRolesUseCase   *usecase.ListRolesUseCase
+	createRoleUseCase          *usecase.CreateRoleUseCase
+	getRoleByIDUseCase         *usecase.GetRoleByIDUseCase
+	updateRoleUseCase          *usecase.UpdateRoleUseCase
+	deleteRoleUseCase          *usecase.DeleteRoleUseCase
+	listRolesUseCase           *usecase.ListRolesUseCase
 	listRolesByCriteriaUseCase *usecase.ListRolesByCriteriaUseCase
-	criteriaBuilder    *criteria.RoleCriteriaBuilder
+	criteriaBuilder            *criteria.RoleCriteriaBuilder
 }
 
 func NewRoleHandler(
@@ -32,13 +32,13 @@ func NewRoleHandler(
 	criteriaBuilder *criteria.RoleCriteriaBuilder,
 ) *RoleHandler {
 	return &RoleHandler{
-		createRoleUseCase:  createRoleUseCase,
-		getRoleByIDUseCase: getRoleByIDUseCase,
-		updateRoleUseCase:  updateRoleUseCase,
-		deleteRoleUseCase:  deleteRoleUseCase,
-		listRolesUseCase:   listRolesUseCase,
+		createRoleUseCase:          createRoleUseCase,
+		getRoleByIDUseCase:         getRoleByIDUseCase,
+		updateRoleUseCase:          updateRoleUseCase,
+		deleteRoleUseCase:          deleteRoleUseCase,
+		listRolesUseCase:           listRolesUseCase,
 		listRolesByCriteriaUseCase: listRolesByCriteriaUseCase,
-		criteriaBuilder:    criteriaBuilder,
+		criteriaBuilder:            criteriaBuilder,
 	}
 }
 

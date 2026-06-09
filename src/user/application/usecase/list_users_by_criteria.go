@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/mercadocercano/criteria"
-	"iam/src/user/domain/entity"
+	"iam/src/user/application/response"
 	"iam/src/user/domain/port"
 )
 
@@ -21,19 +21,20 @@ func NewListUsersByCriteriaUseCase(userRepo port.UserCriteriaRepository) *ListUs
 }
 
 // Execute ejecuta la búsqueda de usuarios por criterios
-func (uc *ListUsersByCriteriaUseCase) Execute(ctx context.Context, searchCriteria criteria.Criteria) (*criteria.ListResponse[entity.User], error) {
-	// Buscar usuarios según criterios
+func (uc *ListUsersByCriteriaUseCase) Execute(ctx context.Context, searchCriteria criteria.Criteria) (*criteria.ListResponse[response.UserResponse], error) {
 	users, err := uc.userRepo.SearchByCriteria(ctx, searchCriteria)
 	if err != nil {
 		return nil, err
 	}
 
-	// Contar total de usuarios según criterios (sin paginación)
 	total, err := uc.userRepo.CountByCriteria(ctx, searchCriteria)
 	if err != nil {
 		return nil, err
 	}
 
-	// Crear respuesta usando el helper genérico
-	return criteria.NewListResponseFromCriteria(users, total, searchCriteria), nil
+	dtos := make([]*response.UserResponse, len(users))
+	for i, u := range users {
+		dtos[i] = response.NewUserResponse(u)
+	}
+	return criteria.NewListResponseFromCriteria(dtos, total, searchCriteria), nil
 }

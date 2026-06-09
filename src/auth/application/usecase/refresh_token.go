@@ -6,13 +6,10 @@ import (
 	"encoding/base64"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
-
 	"iam/src/auth/application/response"
 	"iam/src/auth/domain/entity"
 	"iam/src/auth/domain/port"
 	"iam/src/auth/domain/value_object"
-	tenant_vo "iam/src/tenant/domain/value_object"
 )
 
 type RefreshTokenUseCase struct {
@@ -20,6 +17,7 @@ type RefreshTokenUseCase struct {
 	authRepo      port.AuthRepository
 	userService   port.UserService
 	tenantService port.TenantService
+	jwtService    port.JWTService
 }
 
 func NewRefreshTokenUseCase(
@@ -27,12 +25,14 @@ func NewRefreshTokenUseCase(
 	authRepo port.AuthRepository,
 	userService port.UserService,
 	tenantService port.TenantService,
+	jwtService port.JWTService,
 ) *RefreshTokenUseCase {
 	return &RefreshTokenUseCase{
 		config:        config,
 		authRepo:      authRepo,
 		userService:   userService,
 		tenantService: tenantService,
+		jwtService:    jwtService,
 	}
 }
 
@@ -82,14 +82,9 @@ func (uc *RefreshTokenUseCase) Execute(ctx context.Context, refreshToken string)
 }
 
 func (uc *RefreshTokenUseCase) generateAccessToken(user *port.UserData) (string, error) {
-	// Obtener features del tenant
 	features, err := uc.tenantService.Execute(context.Background(), user.TenantID)
 	if err != nil {
-		// Si no se pueden obtener las features, usar valores por defecto
-		features = &tenant_vo.TenantFeatures{
-			FriendsFamily:    false,
-			PremiumAnalytics: false,
-		}
+		features = value_object.DefaultTenantFeatures()
 	}
 
 	claims := value_object.NewTokenClaims(
@@ -101,8 +96,7 @@ func (uc *RefreshTokenUseCase) generateAccessToken(user *port.UserData) (string,
 		time.Now().Add(uc.config.AccessTokenExpiry),
 	)
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(uc.config.JWTSecret))
+	return uc.jwtService.Sign(claims)
 }
 
 func (uc *RefreshTokenUseCase) generateRefreshToken(ctx context.Context, user *port.UserData) (string, error) {

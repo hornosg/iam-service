@@ -8,18 +8,18 @@ import (
 
 	"iam/src/auth/domain/port"
 	"iam/src/auth/domain/value_object"
-	"iam/src/auth/infrastructure/logging"
+	sharedport "github.com/mercadocercano/go-shared/domain/port"
 )
 
 type LogoutUseCase struct {
 	authRepo       port.AuthRepository
-	securityLogger *logging.SecurityLogger
+	securityLogger sharedport.SecurityEventLogger
 }
 
-func NewLogoutUseCase(authRepo port.AuthRepository) *LogoutUseCase {
+func NewLogoutUseCase(authRepo port.AuthRepository, securityLogger sharedport.SecurityEventLogger) *LogoutUseCase {
 	return &LogoutUseCase{
 		authRepo:       authRepo,
-		securityLogger: logging.NewSecurityLogger(),
+		securityLogger: securityLogger,
 	}
 }
 
@@ -33,7 +33,11 @@ func (uc *LogoutUseCase) Execute(ctx context.Context, userID uuid.UUID, claims *
 	if claims != nil {
 		tenantID = claims.TenantID.String()
 	}
-	uc.securityLogger.LogLogout(userID.String(), tenantID, "")
+	uc.securityLogger.Log(sharedport.SecurityEvent{
+		Event:    sharedport.EventLogout,
+		UserID:   userID.String(),
+		TenantID: tenantID,
+	})
 
 	return uc.authRepo.DeleteAllUserRefreshTokens(ctx, userID)
 }

@@ -9,11 +9,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 
+	"github.com/mercadocercano/criteria"
 	"iam/src/plan/domain/entity"
 	"iam/src/plan/domain/exception"
 	"iam/src/plan/domain/port"
 	"iam/src/plan/domain/value_object"
-	"github.com/mercadocercano/criteria"
 )
 
 type PostgresPlanRepository struct {
@@ -295,7 +295,7 @@ func (r *PostgresPlanRepository) scanPlan(row *sql.Row) (*entity.Plan, error) {
 
 // scanPlans mapea múltiples filas a entidades Plan
 func (r *PostgresPlanRepository) scanPlans(rows *sql.Rows) ([]*entity.Plan, error) {
-	var plans []*entity.Plan
+	plans := make([]*entity.Plan, 0)
 
 	for rows.Next() {
 		var typeStr, statusStr string

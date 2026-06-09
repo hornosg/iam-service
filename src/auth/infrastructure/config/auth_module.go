@@ -12,9 +12,11 @@ import (
 
 	"iam/src/auth/application/usecase"
 	"iam/src/auth/domain/port"
+	"iam/src/auth/infrastructure/adapter"
 	"iam/src/auth/infrastructure/controller"
 	authmw "iam/src/auth/infrastructure/middleware"
 	"iam/src/auth/infrastructure/persistence/repository"
+	sharedlog "github.com/mercadocercano/go-shared/infrastructure/logging"
 )
 
 const (
@@ -27,7 +29,7 @@ type AuthModuleConfig struct {
 	JWTSecret          string
 	AccessTokenExpiry  time.Duration
 	RefreshTokenExpiry time.Duration
-	GoogleClientID     string
+	GoogleClientID     string // usado solo para construir el adapter HTTP; no llega al dominio
 }
 
 // NewAuthModuleConfigFromEnv crea la configuración leyendo variables de entorno y valida seguridad.
@@ -71,21 +73,26 @@ func ValidateJWTSecret(secret string) error {
 func SetupAuthModule(router *gin.RouterGroup, db *sql.DB, userService port.UserService, tenantService port.TenantService, config AuthModuleConfig) {
 	// Crear configuración para casos de uso
 	authConfig := usecase.AuthConfig{
-		JWTSecret:          config.JWTSecret,
 		AccessTokenExpiry:  config.AccessTokenExpiry,
 		RefreshTokenExpiry: config.RefreshTokenExpiry,
-		GoogleClientID:     config.GoogleClientID,
 	}
 
 	// Instanciar repositorio
 	authRepo := repository.NewPostgresAuthRepository(db)
 
+	// Instanciar logger de seguridad compartido
+	securityLogger := sharedlog.NewSecurityLogger("iam")
+
+	// Instanciar adapters
+	jwtService := adapter.NewJWTServiceAdapter(config.JWTSecret)
+	googleVerifier := adapter.NewHTTPGoogleTokenVerifier(config.GoogleClientID)
+
 	// Instanciar casos de uso
-	loginUseCase := usecase.NewLoginUseCase(authConfig, authRepo, userService, tenantService)
-	refreshTokenUseCase := usecase.NewRefreshTokenUseCase(authConfig, authRepo, userService, tenantService)
-	validateTokenUseCase := usecase.NewValidateTokenUseCase(authConfig)
-	logoutUseCase := usecase.NewLogoutUseCase(authRepo)
-	revokeAllUseCase := usecase.NewRevokeAllUseCase(authRepo, config.AccessTokenExpiry)
+	loginUseCase := usecase.NewLoginUseCase(authConfig, authRepo, userService, tenantService, jwtService, googleVerifier, securityLogger)
+	refreshTokenUseCase := usecase.NewRefreshTokenUseCase(authConfig, authRepo, userService, tenantService, jwtService)
+	validateTokenUseCase := usecase.NewValidateTokenUseCase(jwtService)
+	logoutUseCase := usecase.NewLogoutUseCase(authRepo, securityLogger)
+	revokeAllUseCase := usecase.NewRevokeAllUseCase(authRepo, config.AccessTokenExpiry, securityLogger)
 
 	// Instanciar controlador
 	authHandler := controller.NewAuthHandler(
@@ -101,7 +108,9 @@ func SetupAuthModule(router *gin.RouterGroup, db *sql.DB, userService port.UserS
 		JWTSecret: config.JWTSecret,
 		AuthRepo:  authRepo,
 		ExcludedRoutes: []string{
-			"/api/v1/auth/*",
+			"/api/v1/auth/login",
+			"/api/v1/auth/refresh",
+			"/api/v1/auth/validate",
 		},
 	}))
 

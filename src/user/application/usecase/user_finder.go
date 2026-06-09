@@ -2,7 +2,7 @@ package usecase
 
 import (
 	"context"
-	"iam/src/shared/domain/service"
+	"github.com/mercadocercano/go-shared/domain/service"
 	"iam/src/user/domain/port"
 
 	"github.com/google/uuid"

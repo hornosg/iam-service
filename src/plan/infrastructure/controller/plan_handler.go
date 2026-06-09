@@ -13,11 +13,11 @@ import (
 )
 
 type PlanHandler struct {
-	createPlanUseCase  *usecase.CreatePlanUseCase
-	getPlanByIDUseCase *usecase.GetPlanByIDUseCase
-	listPlansUseCase   *usecase.ListPlansUseCase
+	createPlanUseCase          *usecase.CreatePlanUseCase
+	getPlanByIDUseCase         *usecase.GetPlanByIDUseCase
+	listPlansUseCase           *usecase.ListPlansUseCase
 	listPlansByCriteriaUseCase *usecase.ListPlansByCriteriaUseCase
-	criteriaBuilder    *criteria.PlanCriteriaBuilder
+	criteriaBuilder            *criteria.PlanCriteriaBuilder
 }
 
 func NewPlanHandler(
@@ -28,11 +28,11 @@ func NewPlanHandler(
 	criteriaBuilder *criteria.PlanCriteriaBuilder,
 ) *PlanHandler {
 	return &PlanHandler{
-		createPlanUseCase:  createPlanUseCase,
-		getPlanByIDUseCase: getPlanByIDUseCase,
-		listPlansUseCase:   listPlansUseCase,
+		createPlanUseCase:          createPlanUseCase,
+		getPlanByIDUseCase:         getPlanByIDUseCase,
+		listPlansUseCase:           listPlansUseCase,
 		listPlansByCriteriaUseCase: listPlansByCriteriaUseCase,
-		criteriaBuilder:    criteriaBuilder,
+		criteriaBuilder:            criteriaBuilder,
 	}
 }
 
