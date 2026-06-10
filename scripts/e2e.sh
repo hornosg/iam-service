@@ -71,13 +71,6 @@ echo "  Servicio listo"
 
 # --- Newman ---
 echo "--- Newman ---"
-newman run postman/collection.json \
-  -e postman/environment.local.json \
-  --env-var "baseUrl=http://localhost:${PORT}/api/v1" \
-  --env-var "hostUrl=http://localhost:${PORT}" \
-  --delay-request 50 \
-  --reporters cli,json \
-  --reporter-json-export newman-report.json \
-  --bail
+BASE_URL="http://localhost:${PORT}" bash postman/run.sh
 
 echo "--- e2e OK ---"

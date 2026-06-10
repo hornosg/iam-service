@@ -25,6 +25,7 @@ go.work
 
 # OS
 .DS_Store
+**/.DS_Store
 Thumbs.db
 
 # Local development
@@ -43,7 +44,7 @@ coverage.out
 logs/
 
 # Newman output
-newman-report.json
+postman/reports/
 
 # Build artifacts
 tmp/
