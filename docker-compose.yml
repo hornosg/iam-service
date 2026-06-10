@@ -1,31 +1,17 @@
-version: '3.8'
-
-# Docker Compose para IAM Service independiente
-# Usa la misma red y configuración que el docker-compose.infra.yml principal
-
 services:
-  # PostgreSQL (referencia al servicio principal)
-  postgres:
-    image: postgres:15-alpine
-    container_name: mc-postgres
+  postgres-setup:
+    image: pgvector/pgvector:pg15
+    container_name: mc-iam-postgres-setup
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: iam_db
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./migrations:/docker-entrypoint-initdb.d
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+      PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    command: >
+      sh -c "
+        psql -h lab-postgres -U ${POSTGRES_USER:-postgres} -c 'CREATE DATABASE iam_db;' || true &&
+        echo 'DB iam_db ready.'
+      "
     networks:
-      - saas-network
+      - lab-network
 
-  # IAM Service
   iam-service:
     build:
       context: .
@@ -33,10 +19,10 @@ services:
       target: development
     container_name: mc-iam-service
     environment:
-      DB_HOST: postgres
+      DB_HOST: lab-postgres
       DB_PORT: 5432
-      DB_USER: postgres
-      DB_PASSWORD: postgres
+      DB_USER: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       DB_NAME: iam_db
       DB_SSLMODE: disable
       GIN_MODE: debug
@@ -49,19 +35,17 @@ services:
       - .:/app
       - iam_go_mod_cache:/go/pkg/mod
     depends_on:
-      postgres:
-        condition: service_healthy
+      - postgres-setup
     networks:
-      - saas-network
+      - lab-network
     labels:
-      - "dev.service=iam"
+      - "logging=promtail"
+      - "service_name=iam-service"
 
 volumes:
-  postgres_data:
-    driver: local
   iam_go_mod_cache:
     driver: local
 
 networks:
-  saas-network:
-    driver: bridge
+  lab-network:
+    external: true
