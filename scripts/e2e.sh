@@ -28,11 +28,20 @@ trap cleanup EXIT
 # --- Postgres e2e ---
 echo "--- Levantando Postgres e2e ---"
 docker compose -f docker-compose.e2e.yml up -d postgres-e2e
-echo "  Esperando healthcheck..."
-for i in $(seq 1 30); do
-  docker compose -f docker-compose.e2e.yml exec -T postgres-e2e pg_isready -U postgres >/dev/null 2>&1 && break
+echo "  Esperando que iam_e2e esté lista (incluyendo seed)..."
+DB_READY=0
+for i in $(seq 1 60); do
+  count=$(docker compose -f docker-compose.e2e.yml exec -T postgres-e2e \
+    psql -U postgres -d iam_e2e -t -c "SELECT COUNT(*) FROM users WHERE email='admin@saasadmin.com'" 2>/dev/null \
+    | tr -d ' \n' || echo "0")
+  if [ "${count:-0}" -gt 0 ] 2>/dev/null; then
+    echo "  DB lista en intento ${i}"
+    DB_READY=1
+    break
+  fi
   sleep 1
 done
+[ "${DB_READY}" -eq 1 ] || { echo "TIMEOUT: base de datos no lista"; exit 1; }
 
 # --- Build ---
 echo "--- Build ---"
