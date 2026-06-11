@@ -2,7 +2,7 @@ package usecase
 
 import (
 	"context"
-	"github.com/mercadocercano/criteria"
+	"github.com/hornosg/go-shared/criteria"
 	"iam/src/tenant/domain/entity"
 	"iam/src/tenant/domain/port"
 )

@@ -1,7 +1,7 @@
 package port
 
 import (
-	"github.com/mercadocercano/criteria"
+	"github.com/hornosg/go-shared/criteria"
 	"iam/src/tenant/domain/entity"
 )
 

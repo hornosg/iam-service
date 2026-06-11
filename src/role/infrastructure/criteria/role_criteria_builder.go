@@ -2,7 +2,7 @@ package criteria
 
 import (
 	"github.com/gin-gonic/gin"
-	crit "github.com/mercadocercano/criteria"
+	crit "github.com/hornosg/go-shared/criteria"
 )
 
 // RoleCriteriaBuilder construye criterios específicos para roles

@@ -10,7 +10,7 @@ import (
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
 	_ "github.com/lib/pq"
-	tenantmw "github.com/mercadocercano/middleware"
+	tenantmw "github.com/hornosg/go-shared/infrastructure/middleware"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"iam/src/auth/infrastructure/adapter"
@@ -20,9 +20,9 @@ import (
 	tenantConfig "iam/src/tenant/infrastructure/config"
 	userConfig "iam/src/user/infrastructure/config"
 
-	sharedport "github.com/mercadocercano/go-shared/domain/port"
-	sharedlog "github.com/mercadocercano/go-shared/infrastructure/logging"
-	sharedmetrics "github.com/mercadocercano/go-shared/infrastructure/metrics"
+	sharedport "github.com/hornosg/go-shared/domain/port"
+	sharedlog "github.com/hornosg/go-shared/infrastructure/logging"
+	sharedmetrics "github.com/hornosg/go-shared/infrastructure/metrics"
 )
 
 var slugRegexp = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9-]*$`)
@@ -52,8 +52,10 @@ func main() {
 
 	// Validación de tenant (X-Tenant-ID vs JWT tenant_id)
 	securityLogger := sharedlog.NewSecurityLogger("iam")
+	serviceNamespace := getEnv("SERVICE_NAMESPACE", "mc")
 	router.Use(tenantmw.TenantValidation(tenantmw.TenantValidationConfig{
 		JWTSecret: os.Getenv("JWT_SECRET"),
+		Namespace: serviceNamespace,
 		ExcludedRoutes: []string{
 			"/health",
 			"/api/v1/health",
@@ -71,6 +73,14 @@ func main() {
 				JWTTenantID:    jwtTenantID,
 				HeaderTenantID: headerTenantID,
 				IPAddress:      ipAddress,
+			})
+		},
+		OnNamespaceMismatch: func(userID, jwtNamespace, expectedNamespace, ipAddress string) {
+			securityLogger.Log(sharedport.SecurityEvent{
+				Event:     sharedport.EventTenantMismatch,
+				UserID:    userID,
+				IPAddress: ipAddress,
+				Reason:    "namespace_mismatch: jwt=" + jwtNamespace + " expected=" + expectedNamespace,
 			})
 		},
 	}))

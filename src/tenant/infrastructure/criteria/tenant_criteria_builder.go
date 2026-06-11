@@ -2,7 +2,7 @@ package criteria
 
 import (
 	"github.com/gin-gonic/gin"
-	crit "github.com/mercadocercano/criteria"
+	crit "github.com/hornosg/go-shared/criteria"
 )
 
 // TenantCriteriaBuilder construye criterios específicos para tenants

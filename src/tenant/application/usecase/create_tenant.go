@@ -8,7 +8,7 @@ import (
 	"iam/src/tenant/domain/entity"
 	"iam/src/tenant/domain/exception"
 	"iam/src/tenant/domain/port"
-	sharedport "github.com/mercadocercano/go-shared/domain/port"
+	sharedport "github.com/hornosg/go-shared/domain/port"
 )
 
 type CreateTenantUseCase struct {

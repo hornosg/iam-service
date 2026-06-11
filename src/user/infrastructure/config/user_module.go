@@ -5,7 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/mercadocercano/go-shared/domain/service"
+	"github.com/hornosg/go-shared/domain/service"
 	"iam/src/user/application/usecase"
 	"iam/src/user/infrastructure/controller"
 	"iam/src/user/infrastructure/persistence/repository"

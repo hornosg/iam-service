@@ -7,7 +7,7 @@ import (
 	"github.com/google/uuid"
 
 	"iam/src/auth/domain/port"
-	sharedport "github.com/mercadocercano/go-shared/domain/port"
+	sharedport "github.com/hornosg/go-shared/domain/port"
 )
 
 type RevokeAllUseCase struct {

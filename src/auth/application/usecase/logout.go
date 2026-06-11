@@ -8,7 +8,7 @@ import (
 
 	"iam/src/auth/domain/port"
 	"iam/src/auth/domain/value_object"
-	sharedport "github.com/mercadocercano/go-shared/domain/port"
+	sharedport "github.com/hornosg/go-shared/domain/port"
 )
 
 type LogoutUseCase struct {

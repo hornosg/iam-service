@@ -17,7 +17,7 @@ import (
 	"iam/src/auth/domain/port"
 	"iam/src/auth/domain/value_object"
 	"iam/src/auth/infrastructure/adapter"
-	sharedlog "github.com/mercadocercano/go-shared/infrastructure/logging"
+	sharedlog "github.com/hornosg/go-shared/infrastructure/logging"
 	"iam/test/auth/infrastructure/persistence/repository"
 )
 

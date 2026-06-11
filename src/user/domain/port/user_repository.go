@@ -2,7 +2,7 @@ package port
 
 import (
 	"context"
-	"github.com/mercadocercano/criteria"
+	"github.com/hornosg/go-shared/criteria"
 	"iam/src/user/domain/entity"
 	"iam/src/user/domain/value_object"
 

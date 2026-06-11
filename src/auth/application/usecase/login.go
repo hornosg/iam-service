@@ -16,7 +16,7 @@ import (
 	"iam/src/auth/domain/entity"
 	"iam/src/auth/domain/port"
 	"iam/src/auth/domain/value_object"
-	sharedport "github.com/mercadocercano/go-shared/domain/port"
+	sharedport "github.com/hornosg/go-shared/domain/port"
 )
 
 var (
@@ -29,6 +29,7 @@ var (
 type AuthConfig struct {
 	AccessTokenExpiry  time.Duration
 	RefreshTokenExpiry time.Duration
+	Namespace          string
 }
 
 type LoginUseCase struct {
@@ -222,6 +223,7 @@ func (uc *LoginUseCase) generateAccessToken(user *port.UserData) (string, error)
 		user.TenantID,
 		user.RoleID,
 		user.Email,
+		uc.config.Namespace,
 		features,
 		time.Now().Add(uc.config.AccessTokenExpiry),
 	)

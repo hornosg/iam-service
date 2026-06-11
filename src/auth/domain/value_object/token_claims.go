@@ -9,6 +9,7 @@ import (
 type TokenClaims struct {
 	JTI       uuid.UUID       `json:"jti"`
 	Issuer    string          `json:"iss"`
+	Namespace string          `json:"namespace"`
 	UserID    uuid.UUID       `json:"user_id"`
 	Email     string          `json:"email"`
 	TenantID  uuid.UUID       `json:"tenant_id"`
@@ -17,10 +18,11 @@ type TokenClaims struct {
 	ExpiresAt int64           `json:"exp"`
 }
 
-func NewTokenClaims(userID, tenantID, roleID uuid.UUID, email string, features *TenantFeatures, expiresAt time.Time) *TokenClaims {
+func NewTokenClaims(userID, tenantID, roleID uuid.UUID, email, namespace string, features *TenantFeatures, expiresAt time.Time) *TokenClaims {
 	return &TokenClaims{
 		JTI:       uuid.New(),
 		Issuer:    "iam-service",
+		Namespace: namespace,
 		UserID:    userID,
 		Email:     email,
 		TenantID:  tenantID,

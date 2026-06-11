@@ -11,7 +11,7 @@ import (
 	"io"
 
 	"iam/src/auth/application/usecase"
-	sharedlog "github.com/mercadocercano/go-shared/infrastructure/logging"
+	sharedlog "github.com/hornosg/go-shared/infrastructure/logging"
 	authEntity "iam/test/auth/domain/entity"
 	"iam/test/auth/infrastructure/persistence/repository"
 )

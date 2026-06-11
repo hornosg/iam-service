@@ -92,6 +92,7 @@ func (uc *RefreshTokenUseCase) generateAccessToken(user *port.UserData) (string,
 		user.TenantID,
 		user.RoleID,
 		user.Email,
+		uc.config.Namespace,
 		features,
 		time.Now().Add(uc.config.AccessTokenExpiry),
 	)

@@ -16,7 +16,7 @@ import (
 	"iam/src/auth/infrastructure/controller"
 	authmw "iam/src/auth/infrastructure/middleware"
 	"iam/src/auth/infrastructure/persistence/repository"
-	sharedlog "github.com/mercadocercano/go-shared/infrastructure/logging"
+	sharedlog "github.com/hornosg/go-shared/infrastructure/logging"
 )
 
 const (
@@ -29,6 +29,7 @@ type AuthModuleConfig struct {
 	JWTSecret          string
 	AccessTokenExpiry  time.Duration
 	RefreshTokenExpiry time.Duration
+	Namespace          string
 	GoogleClientID     string // usado solo para construir el adapter HTTP; no llega al dominio
 }
 
@@ -47,10 +48,16 @@ func NewAuthModuleConfigFromEnv() AuthModuleConfig {
 
 	googleClientID := os.Getenv("GOOGLE_CLIENT_ID")
 
+	namespace := os.Getenv("SERVICE_NAMESPACE")
+	if namespace == "" {
+		namespace = "mc"
+	}
+
 	return AuthModuleConfig{
 		JWTSecret:          jwtSecret,
 		AccessTokenExpiry:  15 * time.Minute,
 		RefreshTokenExpiry: 7 * 24 * time.Hour,
+		Namespace:          namespace,
 		GoogleClientID:     googleClientID,
 	}
 }
@@ -75,6 +82,7 @@ func SetupAuthModule(router *gin.RouterGroup, db *sql.DB, userService port.UserS
 	authConfig := usecase.AuthConfig{
 		AccessTokenExpiry:  config.AccessTokenExpiry,
 		RefreshTokenExpiry: config.RefreshTokenExpiry,
+		Namespace:          config.Namespace,
 	}
 
 	// Instanciar repositorio

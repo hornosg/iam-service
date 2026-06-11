@@ -5,7 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	sharedport "github.com/mercadocercano/go-shared/domain/port"
+	sharedport "github.com/hornosg/go-shared/domain/port"
 	"iam/src/tenant/application/usecase"
 	"iam/src/tenant/infrastructure/controller"
 	"iam/src/tenant/infrastructure/criteria"

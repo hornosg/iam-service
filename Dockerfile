@@ -13,7 +13,7 @@ RUN apk add --no-cache git ca-certificates tzdata
 
 # Configure private Go modules
 ARG GITHUB_TOKEN
-ENV GOPRIVATE=github.com/mercadocercano/*
+ENV GOPRIVATE=github.com/hornosg/*,github.com/mercadocercano/*
 RUN if [ -n "$GITHUB_TOKEN" ]; then git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"; fi
 
 
@@ -43,19 +43,15 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
 # ==============================================
 # Stage 3: Development stage (with Air hot reload)
 # ==============================================
-FROM mercado-cercano/go-dev:1.24 AS development
+FROM deps AS development
 
-# Configure private Go modules
-ARG GITHUB_TOKEN
-RUN if [ -n "$GITHUB_TOKEN" ]; then git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"; fi
+RUN apk add --no-cache curl && \
+    go install github.com/air-verse/air@latest && \
+    addgroup -S appgroup && adduser -S appuser -G appgroup
 
 WORKDIR /app
 
-# Copy go mod files first (for better caching)
-COPY go.mod go.sum ./
-
-# Download dependencies as root to avoid permission issues
-RUN go mod download
+# go.mod/go.sum ya copiados y módulos descargados en deps
 
 # Create necessary directories and set permissions
 RUN mkdir -p tmp scripts migrations logs /go/pkg/mod && \

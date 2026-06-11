@@ -12,7 +12,7 @@ import (
 
 	"iam/src/auth/application/usecase"
 	"iam/src/auth/domain/value_object"
-	sharedlog "github.com/mercadocercano/go-shared/infrastructure/logging"
+	sharedlog "github.com/hornosg/go-shared/infrastructure/logging"
 	authEntity "iam/test/auth/domain/entity"
 	"iam/test/auth/infrastructure/persistence/repository"
 )

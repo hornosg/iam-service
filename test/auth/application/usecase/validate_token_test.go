@@ -33,6 +33,7 @@ func TestValidateTokenUseCase_Execute_ValidToken_ReturnsClaims(t *testing.T) {
 		tenantID,
 		roleID,
 		"test@example.com",
+		"mc",
 		value_object.DefaultTenantFeatures(),
 		time.Now().Add(15*time.Minute),
 	)
@@ -61,6 +62,7 @@ func TestValidateTokenUseCase_Execute_ExpiredToken_ReturnsError(t *testing.T) {
 		uuid.New(),
 		uuid.New(),
 		"test@example.com",
+		"mc",
 		value_object.DefaultTenantFeatures(),
 		time.Now().Add(-1*time.Hour), // Ya expirado
 	)
@@ -97,6 +99,7 @@ func TestValidateTokenUseCase_Execute_WrongSecret_ReturnsError(t *testing.T) {
 		uuid.New(),
 		uuid.New(),
 		"test@example.com",
+		"mc",
 		value_object.DefaultTenantFeatures(),
 		time.Now().Add(15*time.Minute),
 	)

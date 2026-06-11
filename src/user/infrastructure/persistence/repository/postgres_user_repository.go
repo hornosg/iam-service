@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 
-	"github.com/mercadocercano/criteria"
+	"github.com/hornosg/go-shared/criteria"
 	"iam/src/user/domain/entity"
 	"iam/src/user/domain/exception"
 	"iam/src/user/domain/port"

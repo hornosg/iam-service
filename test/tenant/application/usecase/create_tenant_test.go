@@ -12,7 +12,7 @@ import (
 	"iam/src/tenant/application/usecase"
 	"iam/src/tenant/domain/entity"
 	"iam/src/tenant/domain/exception"
-	sharedmetrics "github.com/mercadocercano/go-shared/infrastructure/metrics"
+	sharedmetrics "github.com/hornosg/go-shared/infrastructure/metrics"
 	tenantMother "iam/test/tenant/domain/entity"
 	"iam/test/tenant/infrastructure/persistence/repository"
 )
