@@ -1,11 +1,11 @@
 # Dockerfile.dev para Go con hot reload
-FROM golang:1.24-alpine
+FROM golang:1.25-alpine
 
 WORKDIR /app
 
 # Instalar dependencias del sistema y air para hot reload (versión compatible)
 RUN apk add --no-cache git curl postgresql-client && \
-    go install github.com/air-verse/air@v1.61.5
+    go install github.com/air-verse/air@latest
 
 # Copiar archivos de proyecto
 COPY go.mod go.sum ./

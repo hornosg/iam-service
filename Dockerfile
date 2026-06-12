@@ -46,7 +46,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
 FROM deps AS development
 
 RUN apk add --no-cache curl && \
-    go install github.com/air-verse/air@latest && \
+    go install github.com/air-verse/air@v1.61.7 && \
     addgroup -S appgroup && adduser -S appuser -G appgroup
 
 WORKDIR /app
