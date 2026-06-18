@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -30,12 +31,17 @@ func NewPostgresPlanRepository(db *sql.DB) port.PlanCriteriaRepository {
 
 // Create inserta un nuevo plan en la base de datos
 func (r *PostgresPlanRepository) Create(ctx context.Context, plan *entity.Plan) error {
+	rateLimitsJSON, err := marshalRateLimits(plan.RateLimits)
+	if err != nil {
+		return fmt.Errorf("error marshaling rate_limits: %w", err)
+	}
+
 	query := `
-		INSERT INTO plans (id, name, description, type, status, max_users, price_month, price_year, features, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		INSERT INTO plans (id, name, description, type, status, max_users, price_month, price_year, features, rate_limits, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 	`
 
-	_, err := r.db.ExecContext(ctx, query,
+	_, err = r.db.ExecContext(ctx, query,
 		plan.ID,
 		plan.Name,
 		plan.Description,
@@ -45,6 +51,7 @@ func (r *PostgresPlanRepository) Create(ctx context.Context, plan *entity.Plan) 
 		plan.PriceMonth,
 		plan.PriceYear,
 		pq.Array(plan.Features),
+		rateLimitsJSON,
 		plan.CreatedAt,
 		plan.UpdatedAt,
 	)
@@ -65,7 +72,7 @@ func (r *PostgresPlanRepository) Create(ctx context.Context, plan *entity.Plan) 
 // GetByID obtiene un plan por su ID
 func (r *PostgresPlanRepository) GetByID(ctx context.Context, id uuid.UUID) (*entity.Plan, error) {
 	query := `
-		SELECT id, name, description, type, status, max_users, price_month, price_year, features, created_at, updated_at
+		SELECT id, name, description, type, status, max_users, price_month, price_year, features, rate_limits, created_at, updated_at
 		FROM plans
 		WHERE id = $1
 	`
@@ -77,7 +84,7 @@ func (r *PostgresPlanRepository) GetByID(ctx context.Context, id uuid.UUID) (*en
 // GetByName obtiene un plan por su nombre
 func (r *PostgresPlanRepository) GetByName(ctx context.Context, name string) (*entity.Plan, error) {
 	query := `
-		SELECT id, name, description, type, status, max_users, price_month, price_year, features, created_at, updated_at
+		SELECT id, name, description, type, status, max_users, price_month, price_year, features, rate_limits, created_at, updated_at
 		FROM plans
 		WHERE name = $1
 	`
@@ -88,10 +95,15 @@ func (r *PostgresPlanRepository) GetByName(ctx context.Context, name string) (*e
 
 // Update actualiza un plan existente
 func (r *PostgresPlanRepository) Update(ctx context.Context, plan *entity.Plan) error {
+	rateLimitsJSON, err := marshalRateLimits(plan.RateLimits)
+	if err != nil {
+		return fmt.Errorf("error marshaling rate_limits: %w", err)
+	}
+
 	query := `
 		UPDATE plans
-		SET name = $2, description = $3, type = $4, status = $5, max_users = $6, 
-		    price_month = $7, price_year = $8, features = $9, updated_at = $10
+		SET name = $2, description = $3, type = $4, status = $5, max_users = $6,
+		    price_month = $7, price_year = $8, features = $9, rate_limits = $10, updated_at = $11
 		WHERE id = $1
 	`
 
@@ -105,6 +117,7 @@ func (r *PostgresPlanRepository) Update(ctx context.Context, plan *entity.Plan) 
 		plan.PriceMonth,
 		plan.PriceYear,
 		pq.Array(plan.Features),
+		rateLimitsJSON,
 		plan.UpdatedAt,
 	)
 
@@ -152,7 +165,7 @@ func (r *PostgresPlanRepository) Delete(ctx context.Context, id uuid.UUID) error
 // GetByType obtiene planes por tipo
 func (r *PostgresPlanRepository) GetByType(ctx context.Context, planType value_object.PlanType) ([]*entity.Plan, error) {
 	query := `
-		SELECT id, name, description, type, status, max_users, price_month, price_year, features, created_at, updated_at
+		SELECT id, name, description, type, status, max_users, price_month, price_year, features, rate_limits, created_at, updated_at
 		FROM plans
 		WHERE type = $1
 		ORDER BY created_at DESC
@@ -170,7 +183,7 @@ func (r *PostgresPlanRepository) GetByType(ctx context.Context, planType value_o
 // GetByStatus obtiene planes por status
 func (r *PostgresPlanRepository) GetByStatus(ctx context.Context, status value_object.PlanStatus) ([]*entity.Plan, error) {
 	query := `
-		SELECT id, name, description, type, status, max_users, price_month, price_year, features, created_at, updated_at
+		SELECT id, name, description, type, status, max_users, price_month, price_year, features, rate_limits, created_at, updated_at
 		FROM plans
 		WHERE status = $1
 		ORDER BY created_at DESC
@@ -193,7 +206,7 @@ func (r *PostgresPlanRepository) GetActive(ctx context.Context) ([]*entity.Plan,
 // List obtiene planes con paginación
 func (r *PostgresPlanRepository) List(ctx context.Context, limit, offset int) ([]*entity.Plan, error) {
 	query := `
-		SELECT id, name, description, type, status, max_users, price_month, price_year, features, created_at, updated_at
+		SELECT id, name, description, type, status, max_users, price_month, price_year, features, rate_limits, created_at, updated_at
 		FROM plans
 		ORDER BY created_at DESC
 		LIMIT $1 OFFSET $2
@@ -251,6 +264,7 @@ func (r *PostgresPlanRepository) CountByStatus(ctx context.Context, status value
 func (r *PostgresPlanRepository) scanPlan(row *sql.Row) (*entity.Plan, error) {
 	var typeStr, statusStr string
 	var featuresArray pq.StringArray
+	var rateLimitsRaw []byte
 	plan := &entity.Plan{}
 
 	err := row.Scan(
@@ -263,6 +277,7 @@ func (r *PostgresPlanRepository) scanPlan(row *sql.Row) (*entity.Plan, error) {
 		&plan.PriceMonth,
 		&plan.PriceYear,
 		&featuresArray,
+		&rateLimitsRaw,
 		&plan.CreatedAt,
 		&plan.UpdatedAt,
 	)
@@ -290,6 +305,10 @@ func (r *PostgresPlanRepository) scanPlan(row *sql.Row) (*entity.Plan, error) {
 	// Convertir features array
 	plan.Features = []string(featuresArray)
 
+	if err := unmarshalRateLimits(rateLimitsRaw, plan); err != nil {
+		return nil, fmt.Errorf("error parsing rate_limits: %w", err)
+	}
+
 	return plan, nil
 }
 
@@ -300,6 +319,7 @@ func (r *PostgresPlanRepository) scanPlans(rows *sql.Rows) ([]*entity.Plan, erro
 	for rows.Next() {
 		var typeStr, statusStr string
 		var featuresArray pq.StringArray
+		var rateLimitsRaw []byte
 		plan := &entity.Plan{}
 
 		err := rows.Scan(
@@ -312,6 +332,7 @@ func (r *PostgresPlanRepository) scanPlans(rows *sql.Rows) ([]*entity.Plan, erro
 			&plan.PriceMonth,
 			&plan.PriceYear,
 			&featuresArray,
+			&rateLimitsRaw,
 			&plan.CreatedAt,
 			&plan.UpdatedAt,
 		)
@@ -336,6 +357,10 @@ func (r *PostgresPlanRepository) scanPlans(rows *sql.Rows) ([]*entity.Plan, erro
 		// Convertir features array
 		plan.Features = []string(featuresArray)
 
+		if err := unmarshalRateLimits(rateLimitsRaw, plan); err != nil {
+			return nil, fmt.Errorf("error parsing rate_limits: %w", err)
+		}
+
 		plans = append(plans, plan)
 	}
 
@@ -346,10 +371,28 @@ func (r *PostgresPlanRepository) scanPlans(rows *sql.Rows) ([]*entity.Plan, erro
 	return plans, nil
 }
 
+// marshalRateLimits serializa la matriz de rate limits a JSONB. nil → "{}" (la columna es
+// NOT NULL DEFAULT '{}').
+func marshalRateLimits(rl value_object.RateLimits) ([]byte, error) {
+	if rl == nil {
+		return []byte("{}"), nil
+	}
+	return json.Marshal(rl)
+}
+
+// unmarshalRateLimits parsea el JSONB de la columna a la entidad. Vacío/null → mapa vacío.
+func unmarshalRateLimits(raw []byte, plan *entity.Plan) error {
+	if len(raw) == 0 {
+		plan.RateLimits = value_object.RateLimits{}
+		return nil
+	}
+	return json.Unmarshal(raw, &plan.RateLimits)
+}
+
 // SearchByCriteria busca planes usando criterios
 func (r *PostgresPlanRepository) SearchByCriteria(ctx context.Context, crit criteria.Criteria) ([]*entity.Plan, error) {
 	baseQuery := `
-		SELECT id, name, description, type, status, max_users, price_month, price_year, features, created_at, updated_at
+		SELECT id, name, description, type, status, max_users, price_month, price_year, features, rate_limits, created_at, updated_at
 		FROM plans
 	`
 

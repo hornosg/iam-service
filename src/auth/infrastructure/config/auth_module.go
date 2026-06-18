@@ -14,6 +14,7 @@ import (
 	"iam/src/auth/domain/port"
 	"iam/src/auth/infrastructure/adapter"
 	"iam/src/auth/infrastructure/controller"
+	authlogging "iam/src/auth/infrastructure/logging"
 	authmw "iam/src/auth/infrastructure/middleware"
 	"iam/src/auth/infrastructure/persistence/repository"
 	sharedlog "github.com/hornosg/go-shared/infrastructure/logging"
@@ -94,10 +95,16 @@ func SetupAuthModule(router *gin.RouterGroup, db *sql.DB, userService port.UserS
 	// Instanciar adapters
 	jwtService := adapter.NewJWTServiceAdapter(config.JWTSecret)
 	googleVerifier := adapter.NewHTTPGoogleTokenVerifier(config.GoogleClientID)
+	// RoleResolver: resuelve slug+permisos del rol en la emisión (login/refresh) para
+	// poblar los claims `roles`/`perms`. Lee la tabla roles directo (aislamiento de tipos).
+	roleResolver := adapter.NewSQLRoleResolverAdapter(db)
+	// PlanResolver: resuelve el tier del plan del tenant para el claim `plan` (rate limiting
+	// por plan, ADR-003). Lee tenants JOIN plans directo (aislamiento de tipos).
+	planResolver := adapter.NewSQLPlanResolverAdapter(db)
 
 	// Instanciar casos de uso
-	loginUseCase := usecase.NewLoginUseCase(authConfig, authRepo, userService, tenantService, jwtService, googleVerifier, securityLogger)
-	refreshTokenUseCase := usecase.NewRefreshTokenUseCase(authConfig, authRepo, userService, tenantService, jwtService)
+	loginUseCase := usecase.NewLoginUseCase(authConfig, authRepo, userService, tenantService, jwtService, roleResolver, planResolver, googleVerifier, securityLogger)
+	refreshTokenUseCase := usecase.NewRefreshTokenUseCase(authConfig, authRepo, userService, tenantService, jwtService, roleResolver, planResolver)
 	validateTokenUseCase := usecase.NewValidateTokenUseCase(jwtService)
 	logoutUseCase := usecase.NewLogoutUseCase(authRepo, securityLogger)
 	revokeAllUseCase := usecase.NewRevokeAllUseCase(authRepo, config.AccessTokenExpiry, securityLogger)
@@ -126,10 +133,11 @@ func SetupAuthModule(router *gin.RouterGroup, db *sql.DB, userService port.UserS
 	authHandler.RegisterRoutes(router)
 
 	// Iniciar goroutine de limpieza de tokens revocados expirados
-	go startRevocationCleanup(authRepo)
+	tokenMaintenanceLogger := authlogging.NewTokenMaintenanceLogger("iam")
+	go startRevocationCleanup(authRepo, tokenMaintenanceLogger)
 }
 
-func startRevocationCleanup(repo port.AuthRepository) {
+func startRevocationCleanup(repo port.AuthRepository, logger port.TokenMaintenanceEventLogger) {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 
@@ -138,9 +146,15 @@ func startRevocationCleanup(repo port.AuthRepository) {
 		count, err := repo.CleanupExpiredRevocations(ctx)
 		cancel()
 		if err != nil {
-			log.Printf("[REVOCATION_CLEANUP] Error cleaning up expired revocations: %v", err)
+			logger.Log(port.TokenMaintenanceEvent{
+				Event:  port.EventRevocationCleanupFailed,
+				Reason: err.Error(),
+			})
 		} else if count > 0 {
-			log.Printf("[REVOCATION_CLEANUP] Cleaned up %d expired revocation entries", count)
+			logger.Log(port.TokenMaintenanceEvent{
+				Event: port.EventRevocationCleanupCompleted,
+				Count: count,
+			})
 		}
 	}
 }

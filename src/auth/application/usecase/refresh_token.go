@@ -18,6 +18,8 @@ type RefreshTokenUseCase struct {
 	userService   port.UserService
 	tenantService port.TenantService
 	jwtService    port.JWTService
+	roleResolver  port.RoleResolver
+	planResolver  port.PlanResolver
 }
 
 func NewRefreshTokenUseCase(
@@ -26,6 +28,8 @@ func NewRefreshTokenUseCase(
 	userService port.UserService,
 	tenantService port.TenantService,
 	jwtService port.JWTService,
+	roleResolver port.RoleResolver,
+	planResolver port.PlanResolver,
 ) *RefreshTokenUseCase {
 	return &RefreshTokenUseCase{
 		config:        config,
@@ -33,6 +37,8 @@ func NewRefreshTokenUseCase(
 		userService:   userService,
 		tenantService: tenantService,
 		jwtService:    jwtService,
+		roleResolver:  roleResolver,
+		planResolver:  planResolver,
 	}
 }
 
@@ -55,8 +61,8 @@ func (uc *RefreshTokenUseCase) Execute(ctx context.Context, refreshToken string)
 		return nil, ErrUserNotFound
 	}
 
-	// Generar nuevo access token
-	accessToken, err := uc.generateAccessToken(user)
+	// Generar nuevo access token (re-resuelve el rol VIGENTE → propaga cambios de rol)
+	accessToken, err := uc.generateAccessToken(ctx, user)
 	if err != nil {
 		return nil, err
 	}
@@ -81,8 +87,8 @@ func (uc *RefreshTokenUseCase) Execute(ctx context.Context, refreshToken string)
 	return response.NewLoginResponse(accessToken, newRefreshToken, int(uc.config.AccessTokenExpiry.Seconds()), userData), nil
 }
 
-func (uc *RefreshTokenUseCase) generateAccessToken(user *port.UserData) (string, error) {
-	features, err := uc.tenantService.Execute(context.Background(), user.TenantID)
+func (uc *RefreshTokenUseCase) generateAccessToken(ctx context.Context, user *port.UserData) (string, error) {
+	features, err := uc.tenantService.Execute(ctx, user.TenantID)
 	if err != nil {
 		features = value_object.DefaultTenantFeatures()
 	}
@@ -96,6 +102,11 @@ func (uc *RefreshTokenUseCase) generateAccessToken(user *port.UserData) (string,
 		features,
 		time.Now().Add(uc.config.AccessTokenExpiry),
 	)
+
+	roles, perms := resolveRoleClaims(ctx, uc.roleResolver, user.RoleID)
+	claims.Roles = roles
+	claims.Perms = perms
+	claims.Plan = resolvePlanClaim(ctx, uc.planResolver, user.TenantID)
 
 	return uc.jwtService.Sign(claims)
 }

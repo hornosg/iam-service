@@ -2,24 +2,26 @@ package response
 
 import (
 	"iam/src/plan/domain/entity"
+	"iam/src/plan/domain/value_object"
 	"time"
 
 	"github.com/google/uuid"
 )
 
 type PlanResponse struct {
-	ID             uuid.UUID `json:"id"`
-	Name           string    `json:"name"`
-	Description    string    `json:"description"`
-	Type           string    `json:"type"`
-	Status         string    `json:"status"`
-	MaxUsers       int       `json:"max_users"`
-	PriceMonth     float64   `json:"price_month"`
-	PriceYear      float64   `json:"price_year"`
-	YearlyDiscount float64   `json:"yearly_discount"`
-	Features       []string  `json:"features"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	ID             uuid.UUID               `json:"id"`
+	Name           string                  `json:"name"`
+	Description    string                  `json:"description"`
+	Type           string                  `json:"type"`
+	Status         string                  `json:"status"`
+	MaxUsers       int                     `json:"max_users"`
+	PriceMonth     float64                 `json:"price_month"`
+	PriceYear      float64                 `json:"price_year"`
+	YearlyDiscount float64                 `json:"yearly_discount"`
+	Features       []string                `json:"features"`
+	RateLimits     value_object.RateLimits `json:"rate_limits"`
+	CreatedAt      time.Time               `json:"created_at"`
+	UpdatedAt      time.Time               `json:"updated_at"`
 }
 
 type PlanListResponse struct {
@@ -41,6 +43,7 @@ func NewPlanResponse(plan *entity.Plan) *PlanResponse {
 		PriceYear:      plan.PriceYear,
 		YearlyDiscount: plan.GetYearlyDiscount(),
 		Features:       plan.Features,
+		RateLimits:     plan.RateLimits,
 		CreatedAt:      plan.CreatedAt,
 		UpdatedAt:      plan.UpdatedAt,
 	}

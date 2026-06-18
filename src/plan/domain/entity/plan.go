@@ -17,8 +17,11 @@ type Plan struct {
 	PriceMonth  float64
 	PriceYear   float64
 	Features    []string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	// RateLimits: matriz feature→regla de rate limiting de este plan (ADR-003). Habilita
+	// pricing por rangos de volumen; los servicios la consumen vía el endpoint de planes.
+	RateLimits value_object.RateLimits
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
 }
 
 func NewPlan(name, description string, planType value_object.PlanType, priceMonth, priceYear float64) *Plan {
@@ -32,9 +35,16 @@ func NewPlan(name, description string, planType value_object.PlanType, priceMont
 		PriceMonth:  priceMonth,
 		PriceYear:   priceYear,
 		Features:    []string{},
+		RateLimits:  value_object.RateLimits{},
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}
+}
+
+// SetRateLimits reemplaza la matriz de rate limits del plan.
+func (p *Plan) SetRateLimits(limits value_object.RateLimits) {
+	p.RateLimits = limits
+	p.UpdatedAt = time.Now()
 }
 
 func (p *Plan) UpdateDetails(name, description string) {

@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"log"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -38,6 +37,8 @@ type LoginUseCase struct {
 	userService         port.UserService
 	tenantService       port.TenantService
 	jwtService          port.JWTService
+	roleResolver        port.RoleResolver
+	planResolver        port.PlanResolver
 	googleTokenVerifier port.GoogleTokenVerifier
 	securityLogger      sharedport.SecurityEventLogger
 }
@@ -48,6 +49,8 @@ func NewLoginUseCase(
 	userService port.UserService,
 	tenantService port.TenantService,
 	jwtService port.JWTService,
+	roleResolver port.RoleResolver,
+	planResolver port.PlanResolver,
 	googleTokenVerifier port.GoogleTokenVerifier,
 	securityLogger sharedport.SecurityEventLogger,
 ) *LoginUseCase {
@@ -57,6 +60,8 @@ func NewLoginUseCase(
 		userService:         userService,
 		tenantService:       tenantService,
 		jwtService:          jwtService,
+		roleResolver:        roleResolver,
+		planResolver:        planResolver,
 		googleTokenVerifier: googleTokenVerifier,
 		securityLogger:      securityLogger,
 	}
@@ -67,10 +72,7 @@ func (uc *LoginUseCase) Execute(ctx context.Context, req *request.LoginRequest) 
 }
 
 func (uc *LoginUseCase) ExecuteWithInfo(ctx context.Context, req *request.LoginRequest, ipAddress, userAgent string) (*response.LoginResponse, error) {
-	log.Printf("[LOGIN] Iniciando proceso de login, provider: %s", req.Provider)
-
 	if err := req.Validate(); err != nil {
-		log.Printf("[LOGIN] Error de validación de request: %v", err)
 		return nil, err
 	}
 
@@ -79,18 +81,14 @@ func (uc *LoginUseCase) ExecuteWithInfo(ctx context.Context, req *request.LoginR
 
 	switch req.Provider {
 	case value_object.LocalAuth:
-		log.Printf("[LOGIN] Procesando autenticación local")
 		user, err = uc.loginLocal(ctx, req)
 	case value_object.GoogleAuth:
-		log.Printf("[LOGIN] Procesando autenticación Google")
 		user, err = uc.loginGoogle(ctx, req)
 	default:
-		log.Printf("[LOGIN] Proveedor no soportado: %s", req.Provider)
 		return nil, fmt.Errorf("proveedor de autenticación no soportado: %s", req.Provider)
 	}
 
 	if err != nil {
-		log.Printf("[LOGIN] Error en proceso de autenticación: %v", err)
 		reason := "unknown"
 		if errors.Is(err, ErrInvalidCredentials) {
 			reason = "invalid_credentials"
@@ -107,7 +105,6 @@ func (uc *LoginUseCase) ExecuteWithInfo(ctx context.Context, req *request.LoginR
 		return nil, err
 	}
 
-	log.Printf("[LOGIN] Autenticación exitosa para usuario ID: %s", user.ID)
 	uc.securityLogger.Log(sharedport.SecurityEvent{
 		Event:     sharedport.EventLoginSuccess,
 		UserID:    user.ID.String(),
@@ -118,19 +115,15 @@ func (uc *LoginUseCase) ExecuteWithInfo(ctx context.Context, req *request.LoginR
 	})
 
 	// Generar tokens
-	accessToken, err := uc.generateAccessToken(user)
+	accessToken, err := uc.generateAccessToken(ctx, user)
 	if err != nil {
-		log.Printf("[LOGIN] Error generando access token: %v", err)
 		return nil, fmt.Errorf("error generando access token: %w", err)
 	}
 
 	refreshToken, err := uc.generateRefreshToken(ctx, user)
 	if err != nil {
-		log.Printf("[LOGIN] Error generando refresh token: %v", err)
 		return nil, fmt.Errorf("error generando refresh token: %w", err)
 	}
-
-	log.Printf("[LOGIN] Tokens generados exitosamente para usuario ID: %s", user.ID)
 
 	userData := response.UserData{
 		ID:       user.ID,
@@ -144,38 +137,24 @@ func (uc *LoginUseCase) ExecuteWithInfo(ctx context.Context, req *request.LoginR
 }
 
 func (uc *LoginUseCase) loginLocal(ctx context.Context, req *request.LoginRequest) (*port.UserData, error) {
-	log.Printf("[LOGIN_LOCAL] Buscando usuario por credenciales")
-
 	user, err := uc.userService.FindUserByEmail(ctx, req.Email, req.TenantID)
 	if err != nil {
-		log.Printf("[LOGIN_LOCAL] Usuario no encontrado")
 		return nil, ErrInvalidCredentials
 	}
 
-	log.Printf("[LOGIN_LOCAL] Usuario encontrado - ID: %s, Provider: %s, Status: %s, TenantID: %s",
-		user.ID, user.Provider, user.Status, user.TenantID)
-
 	if value_object.AuthProvider(user.Provider) != value_object.LocalAuth {
-		log.Printf("[LOGIN_LOCAL] Usuario usa proveedor diferente: %s (esperado: LOCAL)", user.Provider)
 		return nil, fmt.Errorf("este usuario usa autenticación %s", user.Provider)
 	}
 
-	log.Printf("[LOGIN_LOCAL] Verificando password para usuario ID: %s", user.ID)
-
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
-		log.Printf("[LOGIN_LOCAL] Password no coincide para usuario ID: %s", user.ID)
 		return nil, ErrInvalidCredentials
 	}
-
-	log.Printf("[LOGIN_LOCAL] Password verificada correctamente para usuario ID: %s", user.ID)
 
 	// Validar tenant si se proporcionó
 	if req.TenantID != nil && *req.TenantID != user.TenantID {
-		log.Printf("[LOGIN_LOCAL] Tenant ID no coincide - Request: %s, Usuario: %s", *req.TenantID, user.TenantID)
 		return nil, ErrInvalidCredentials
 	}
 
-	log.Printf("[LOGIN_LOCAL] Autenticación local exitosa para usuario ID: %s", user.ID)
 	return user, nil
 }
 
@@ -212,8 +191,8 @@ func (uc *LoginUseCase) loginGoogle(ctx context.Context, req *request.LoginReque
 	return user2, nil
 }
 
-func (uc *LoginUseCase) generateAccessToken(user *port.UserData) (string, error) {
-	features, err := uc.tenantService.Execute(context.Background(), user.TenantID)
+func (uc *LoginUseCase) generateAccessToken(ctx context.Context, user *port.UserData) (string, error) {
+	features, err := uc.tenantService.Execute(ctx, user.TenantID)
 	if err != nil {
 		features = value_object.DefaultTenantFeatures()
 	}
@@ -227,6 +206,11 @@ func (uc *LoginUseCase) generateAccessToken(user *port.UserData) (string, error)
 		features,
 		time.Now().Add(uc.config.AccessTokenExpiry),
 	)
+
+	roles, perms := resolveRoleClaims(ctx, uc.roleResolver, user.RoleID)
+	claims.Roles = roles
+	claims.Perms = perms
+	claims.Plan = resolvePlanClaim(ctx, uc.planResolver, user.TenantID)
 
 	return uc.jwtService.Sign(claims)
 }

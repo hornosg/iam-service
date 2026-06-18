@@ -129,6 +129,8 @@ func TestRefreshTokenUseCase_Execute(t *testing.T) {
 			mockUserService,
 			mockTenantService,
 			jwtSvc,
+			NewMockRoleResolver(),
+			NewMockPlanResolver(),
 		)
 
 		userID := uuid.New()
@@ -187,6 +189,8 @@ func TestRefreshTokenUseCase_Execute(t *testing.T) {
 			mockUserService,
 			mockTenantService,
 			jwtSvc,
+			NewMockRoleResolver(),
+			NewMockPlanResolver(),
 		)
 
 		// Act
@@ -218,6 +222,8 @@ func TestRefreshTokenUseCase_Execute(t *testing.T) {
 			mockUserService,
 			mockTenantService,
 			jwtSvc,
+			NewMockRoleResolver(),
+			NewMockPlanResolver(),
 		)
 
 		userID := uuid.New()
@@ -257,6 +263,8 @@ func TestRefreshTokenUseCase_Execute(t *testing.T) {
 			mockUserService,
 			mockTenantService,
 			jwtSvc,
+			NewMockRoleResolver(),
+			NewMockPlanResolver(),
 		)
 
 		userID := uuid.New()
@@ -295,6 +303,8 @@ func TestRefreshTokenUseCase_Execute(t *testing.T) {
 			mockUserService,
 			mockTenantService,
 			jwtSvc,
+			NewMockRoleResolver(),
+			NewMockPlanResolver(),
 		)
 
 		mockAuthRepo.ShouldFailOn("GetRefreshToken")
@@ -328,6 +338,8 @@ func TestRefreshTokenUseCase_Execute(t *testing.T) {
 			mockUserService,
 			mockTenantService,
 			jwtSvc,
+			NewMockRoleResolver(),
+			NewMockPlanResolver(),
 		)
 
 		mockAuthRepo.ShouldFailOn("CreateRefreshToken")
@@ -379,6 +391,8 @@ func TestRefreshTokenUseCase_Execute(t *testing.T) {
 			mockUserService,
 			mockTenantService,
 			jwtSvc,
+			NewMockRoleResolver(),
+			NewMockPlanResolver(),
 		)
 
 		mockTenantService.SetShouldFail(true)
