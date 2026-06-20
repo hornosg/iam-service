@@ -17,6 +17,7 @@ import (
 
 	"iam/src/auth/infrastructure/adapter"
 	"iam/src/auth/infrastructure/config"
+	authmw "iam/src/auth/infrastructure/middleware"
 	planConfig "iam/src/plan/infrastructure/config"
 	roleConfig "iam/src/role/infrastructure/config"
 	tenantConfig "iam/src/tenant/infrastructure/config"
@@ -137,12 +138,23 @@ func main() {
 	// Shared infrastructure
 	metricsRecorder := sharedmetrics.NewPrometheusRecorder()
 
+	// Gates de acceso a los endpoints de gestión. Cierran el agujero del baseline
+	// de Kong: estos endpoints confiaban en el gateway, cuyo fallback anónimo los
+	// dejaba abiertos (ej. GET /api/v1/tenants sin token → 200). Servicios S2S
+	// autorizan por X-API-Key; humanos por JWT + rol.
+	//   - adminGroup       (cross-tenant global): tenants, plans → system_admin
+	//   - tenantScopedGroup (tenant-scoped):      users, roles   → tenant_admin/system_admin
+	s2sAPIKey := env.Get("S2S_API_KEY", "")
+	jwtSecret := os.Getenv("JWT_SECRET")
+	adminGroup := apiV1.Group("", authmw.Authorize(jwtSecret, serviceNamespace, s2sAPIKey, "system_admin"))
+	tenantScopedGroup := apiV1.Group("", authmw.Authorize(jwtSecret, serviceNamespace, s2sAPIKey, "tenant_admin", "system_admin"))
+
 	// Configurar módulos en orden de dependencias
 	// 1. User Module (independiente) - retorna UserFinderService
-	userFinderService := userConfig.SetupUserModule(apiV1, db)
+	userFinderService := userConfig.SetupUserModule(tenantScopedGroup, db)
 
 	// 2. Tenant Module (independiente) - retorna GetTenantFeaturesUseCase
-	tenantFeaturesUC := tenantConfig.SetupTenantModule(apiV1, db, metricsRecorder)
+	tenantFeaturesUC := tenantConfig.SetupTenantModule(adminGroup, db, metricsRecorder)
 
 	// 3. Auth Module (depende de User y Tenant)
 	// El adapter convierte tenant_vo.TenantFeatures → auth_vo.TenantFeatures (anti-corruption layer)
@@ -151,10 +163,10 @@ func main() {
 	config.SetupAuthModule(apiV1, db, userFinderService, tenantService, authConfig)
 
 	// 4. Plan Module (independiente)
-	planConfig.SetupPlanModule(apiV1, db)
+	planConfig.SetupPlanModule(adminGroup, db)
 
 	// 5. Role Module (independiente)
-	roleConfig.SetupRoleModule(apiV1, db)
+	roleConfig.SetupRoleModule(tenantScopedGroup, db)
 
 	// Iniciar el servidor
 	port := env.Get("PORT", "8080")
