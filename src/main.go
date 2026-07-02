@@ -135,8 +135,8 @@ func main() {
 	// de Kong: estos endpoints confiaban en el gateway, cuyo fallback anónimo los
 	// dejaba abiertos (ej. GET /api/v1/tenants sin token → 200). Servicios S2S
 	// autorizan por X-API-Key + scope; humanos por JWT + rol.
-	//   - adminGroup       (cross-tenant global): tenants, plans → system:admin
-	//   - tenantScopedGroup (tenant-scoped):      users, roles   → system:admin or tenant:admin
+	//   - adminGroup       (cross-tenant global): plans → system:admin
+	//   - tenantScopedGroup (tenant-scoped):      users, roles, tenants/:id → system:admin or tenant:admin
 	//
 	// El registro S2S carga una credencial por servicio consumidor desde
 	// S2S_KEY_<SERVICE>. Política de scopes vive en código (s2s.ServicePolicy).
@@ -155,23 +155,29 @@ func main() {
 	// 1. User Module (independiente) - retorna UserFinderService
 	userFinderService := userConfig.SetupUserModule(tenantScopedGroup, db)
 
-	// 2. Tenant Module (independiente) - retorna GetTenantFeaturesUseCase
+	// 2. Tenant Management Module (tenant-scoped): lectura/escritura por ID
+	//    GET/PUT/DELETE /tenants/:id se mueven al grupo tenant-scoped para que
+	//    servicios como onboarding (tenant:admin) puedan gestionar sus propios
+	//    tenants sin necesitar system:admin. List/Plan/Features quedan en adminGroup.
+	tenantConfig.SetupTenantScopedModule(tenantScopedGroup, db, metricsRecorder)
+
+	// 3. Tenant Admin Module (cross-tenant global): list, plans, features → system:admin
 	tenantFeaturesUC := tenantConfig.SetupTenantModule(adminGroup, db, metricsRecorder)
 
-	// 3. Auth Module (depende de User y Tenant)
+	// 4. Auth Module (depende de User y Tenant)
 	// El adapter convierte tenant_vo.TenantFeatures → auth_vo.TenantFeatures (anti-corruption layer)
 	tenantService := adapter.NewTenantFeaturesAdapter(tenantFeaturesUC)
 	authConfig := config.NewAuthModuleConfigFromEnv()
 	config.SetupAuthModule(apiV1, db, userFinderService, tenantService, authConfig)
 
-	// 4. Plan Module (independiente)
+	// 5. Plan Module (independiente)
 	planConfig.SetupPlanModule(adminGroup, db)
 
-	// 5. Role Module (independiente)
+	// 6. Role Module (independiente)
 	roleConfig.SetupRoleModule(tenantScopedGroup, db)
 
-	// 6. Tenant Provision Module — SOLO POST /tenants para whatsapp-agent con scope tenant:provision.
-	// También permitimos system:admin (es un super-scope) para no forzar a onboarding/sales
+	// 7. Tenant Provision Module — SOLO POST /tenants para whatsapp-agent/onboarding con scope tenant:provision.
+	// También permitimos system:admin (es un super-scope) para no forzar a sales
 	// a tener una key separada de tenant:provision mientras migran.
 	provisionGroup := apiV1.Group("", authFactory.RequireScopes([]s2s.Scope{s2s.ScopeTenantProvision, s2s.ScopeSystemAdmin}, "system_admin"))
 	tenantConfig.SetupTenantProvisionModule(provisionGroup, db, metricsRecorder)

@@ -68,9 +68,9 @@ func TestAuthorize(t *testing.T) {
 			wantStatus: http.StatusUnauthorized,
 		},
 		{
-			name:    "S2S API key valida con scope correcto -> 200",
-			scope:   s2s.ScopeSystemAdmin,
-			allowed: []string{"system_admin"},
+			name:    "S2S API key valida con scope tenant:admin -> 200",
+			scope:   s2s.ScopeTenantAdmin,
+			allowed: []string{"tenant_admin", "system_admin"},
 			setHeaders: func(r *http.Request) {
 				r.Header.Set("X-API-Key", testKeyOn)
 			},

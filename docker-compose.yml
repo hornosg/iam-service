@@ -1,7 +1,7 @@
 services:
   postgres-setup:
     image: pgvector/pgvector:pg15
-    container_name: mc-iam-postgres-setup
+    container_name: iam-postgres-setup
     environment:
       PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
     command: >
@@ -17,7 +17,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: development
-    container_name: mc-iam-service
+    container_name: iam-service
     environment:
       DB_HOST: lab-postgres
       DB_PORT: 5432

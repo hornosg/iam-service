@@ -46,12 +46,14 @@ type entry struct {
 // cada servicio consumidor. La key en sí viene de S2S_KEY_<SERVICE> en runtime.
 var ServicePolicy = map[string][]Scope{
 	"whatsapp-agent": {ScopeTenantProvision},
+	// onboarding-service: gestión tenant-scoped (provision + admin). Ya no requiere
+	// system:admin; los endpoints por tenant en IAM fueron movidos a tenant-scoped.
+	"onboarding": {ScopeTenantProvision, ScopeTenantAdmin},
 	// Consumidores legacy que hoy usan la god-key compartida. Se les asigna
 	// system:admin para no romperlos durante la migración, pero queda marcado
 	// como legacy y debe revisarse en una épica de hardening.
-	"onboarding": {ScopeSystemAdmin},
-	"sales":      {ScopeSystemAdmin},
-	"pim":        {ScopeSystemAdmin},
+	"sales": {ScopeSystemAdmin},
+	"pim":   {ScopeSystemAdmin},
 }
 
 // minS2SKeyBytes es la longitud mínima aceptable para una S2S key. 32 bytes

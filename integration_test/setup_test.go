@@ -88,7 +88,7 @@ func newTestServer(t *testing.T) *testServer {
 	validator.RegisterCustomValidators()
 
 	apiV1 := router.Group("/api/v1")
-	tenantConfig.SetupTenantModule(apiV1, db, noopMetricsRecorder{})
+	tenantConfig.SetupTenantScopedModule(apiV1, db, noopMetricsRecorder{})
 	tenantConfig.SetupTenantProvisionModule(apiV1, db, noopMetricsRecorder{})
 	roleConfig.SetupRoleModule(apiV1, db)
 	planConfig.SetupPlanModule(apiV1, db)

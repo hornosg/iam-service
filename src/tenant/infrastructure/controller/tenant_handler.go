@@ -53,10 +53,22 @@ func NewTenantHandler(
 }
 
 // RegisterProvisionRoutes expone SOLO POST /tenants bajo un grupo con scope
-// tenant:provision (whatsapp-agent). El resto de rutas de gestión quedan en
+// tenant:provision (whatsapp-agent/onboarding). El resto de rutas de gestión quedan en
 // RegisterRoutes con scope system:admin.
 func (h *TenantHandler) RegisterProvisionRoutes(router *gin.RouterGroup) {
 	router.POST("/tenants", h.CreateTenant)
+}
+
+// RegisterScopedRoutes expone GET/PUT/DELETE /tenants/:id bajo el grupo tenant-scoped
+// (tenant:admin o system:admin). Permite a servicios S2S operar sobre su propio tenant
+// sin requerir system:admin.
+func (h *TenantHandler) RegisterScopedRoutes(router *gin.RouterGroup) {
+	scoped := router.Group("/tenants")
+	{
+		scoped.GET("/:id", h.GetTenantByID)
+		scoped.PUT("/:id", h.UpdateTenant)
+		scoped.DELETE("/:id", h.DeleteTenant)
+	}
 }
 
 // POST /tenants
@@ -324,16 +336,13 @@ func (h *TenantHandler) UpdateTenantFeatures(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// RegisterRoutes registra las rutas HTTP del módulo tenant (gestión completa,
-// requiere system:admin).
+// RegisterRoutes registra las rutas HTTP del módulo tenant (gestión global,
+// requiere system:admin). Los endpoints por ID se movieron a RegisterScopedRoutes
+// para permitir acceso tenant-scoped sin system:admin.
 func (h *TenantHandler) RegisterRoutes(router *gin.RouterGroup) {
 	tenantGroup := router.Group("/tenants")
 	{
 		tenantGroup.GET("", h.ListTenants)
-		tenantGroup.GET("/:id", h.GetTenantByID)
-		tenantGroup.GET("/by-slug/:slug", h.GetTenantBySlug)
-		tenantGroup.PUT("/:id", h.UpdateTenant)
-		tenantGroup.DELETE("/:id", h.DeleteTenant)
 		tenantGroup.POST("/:id/plan", h.SetTenantPlan)
 		tenantGroup.DELETE("/:id/plan", h.RemoveTenantPlan)
 		tenantGroup.PATCH("/:id/features", h.UpdateTenantFeatures)

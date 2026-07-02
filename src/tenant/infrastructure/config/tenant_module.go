@@ -12,6 +12,28 @@ import (
 	"iam/src/tenant/infrastructure/persistence/repository"
 )
 
+// SetupTenantScopedModule expone las rutas de gestión de un tenant por ID bajo el
+// grupo tenant-scoped (system:admin o tenant:admin). Esto permite que servicios
+// S2S como onboarding, que operan sobre un tenant concreto, no necesiten el scope
+// system:admin solo para leer/actualizar/borrar ese tenant.
+func SetupTenantScopedModule(apiGroup *gin.RouterGroup, db *sql.DB, metricsRecorder sharedport.MetricsRecorder) {
+	tenantRepo := repository.NewPostgresTenantRepository(db)
+	getTenantByIDUseCase := usecase.NewGetTenantByIDUseCase(tenantRepo)
+	updateTenantUseCase := usecase.NewUpdateTenantUseCase(tenantRepo)
+	deleteTenantUseCase := usecase.NewDeleteTenantUseCase(tenantRepo)
+
+	tenantHandler := controller.NewTenantHandler(
+		nil,
+		getTenantByIDUseCase,
+		nil,
+		updateTenantUseCase,
+		deleteTenantUseCase,
+		nil, nil, nil, nil,
+		nil,
+	)
+	tenantHandler.RegisterScopedRoutes(apiGroup)
+}
+
 // SetupTenantModule configura e inicializa el módulo de tenants y retorna el caso de uso para obtener features
 func SetupTenantModule(apiGroup *gin.RouterGroup, db *sql.DB, metricsRecorder sharedport.MetricsRecorder) *usecase.GetTenantFeaturesUseCase {
 	// Crear repositorio PostgreSQL

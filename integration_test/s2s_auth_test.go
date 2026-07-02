@@ -117,6 +117,7 @@ func newTestS2SServer(t *testing.T) *testS2SServer {
 	tenantScopedGroup := apiV1.Group("", authFactory.RequireScopes([]s2s.Scope{s2s.ScopeSystemAdmin, s2s.ScopeTenantAdmin}, "tenant_admin", "system_admin"))
 
 	userFinderService := userConfig.SetupUserModule(tenantScopedGroup, db)
+	tenantConfig.SetupTenantScopedModule(tenantScopedGroup, db, noopMetricsRecorder{})
 	tenantFeaturesUC := tenantConfig.SetupTenantModule(adminGroup, db, noopMetricsRecorder{})
 	_ = userFinderService
 	_ = tenantFeaturesUC
