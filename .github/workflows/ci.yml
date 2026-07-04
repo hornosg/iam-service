@@ -1,0 +1,76 @@
+# CI incremental — corre solo los tests de los paquetes que el diff de la PR afectó
+# (PLAT-E21 T3). Usa scripts/affected-packages.sh (T2): un solo salto de dependientes
+# directos, con fallback a todo el módulo si go.mod/go.sum cambió.
+#
+# NO reemplaza el `go test ./...` completo de deploy.yml en push a main/master — ese
+# sigue siendo la red de seguridad previa al deploy. Este job es exclusivo de PRs.
+
+name: CI
+
+on:
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test-affected:
+    runs-on: ubuntu-latest
+    env:
+      GOPRIVATE: github.com/mercadocercano
+      GONOSUMDB: github.com/mercadocercano
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Configure private modules
+        run: |
+          git config --global url."https://${{ secrets.GO_PRIVATE_TOKEN }}@github.com/".insteadOf "https://github.com/"
+
+      - name: Detect affected packages
+        id: affected
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          PACKAGES="$(./scripts/affected-packages.sh "${BASE_SHA}" "${HEAD_SHA}")"
+          {
+            echo "packages<<CI_PKGS_EOF"
+            echo "${PACKAGES}"
+            echo "CI_PKGS_EOF"
+          } >> "$GITHUB_OUTPUT"
+          if [ -z "${PACKAGES}" ]; then
+            echo "count=0" >> "$GITHUB_OUTPUT"
+          else
+            echo "count=$(printf '%s\n' "${PACKAGES}" | wc -l | tr -d ' ')" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run tests (affected packages only)
+        if: steps.affected.outputs.count != '0'
+        env:
+          AFFECTED_PACKAGES: ${{ steps.affected.outputs.packages }}
+          AFFECTED_COUNT: ${{ steps.affected.outputs.count }}
+        run: |
+          echo "Corriendo ${AFFECTED_COUNT} paquete(s) afectado(s):"
+          echo "${AFFECTED_PACKAGES}"
+          # shellcheck disable=SC2086
+          go test -race -timeout 120s ${AFFECTED_PACKAGES}
+
+      - name: Run vet (affected packages only)
+        if: steps.affected.outputs.count != '0'
+        env:
+          AFFECTED_PACKAGES: ${{ steps.affected.outputs.packages }}
+        run: |
+          # shellcheck disable=SC2086
+          go vet ${AFFECTED_PACKAGES}
+
+      - name: No affected packages
+        if: steps.affected.outputs.count == '0'
+        run: echo "El diff no tocó .go/go.mod/go.sum — nada que testear."

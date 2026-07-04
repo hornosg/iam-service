@@ -1,0 +1,9 @@
+{
+  "service": "iam-service",
+  "module": "iam",
+  "measured_at": "2026-07-04",
+  "coverage_percent": 33.4,
+  "unit": "percent of statements in ./src/...",
+  "command": "go test -coverpkg=./src/... -coverprofile=coverage.out ./... && go tool cover -func=coverage.out",
+  "notes": "Tests viven en un árbol externo iam/test/... (external test packages); sin -coverpkg=./src/... el coverage por paquete reporta 0% aunque haya tests reales, porque go test solo atribuye cobertura al paquete donde corren los tests. Baseline inicial de PLAT-E21 T1 (roadmap.yaml) — usado como umbral de referencia para el gate de cobertura (T5)."
+}
