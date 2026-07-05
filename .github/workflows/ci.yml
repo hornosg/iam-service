@@ -41,7 +41,9 @@ jobs:
       - name: Detect affected packages
         id: affected
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          # pull_request trae el base real; push (sin PR) solo trae "before" (commit
+          # previo en esa rama) — no hay pull_request.base.sha en ese evento.
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.sha }}
         run: |
           PACKAGES="$(./scripts/affected-packages.sh "${BASE_SHA}" "${HEAD_SHA}")"
