@@ -2,6 +2,15 @@
 # Push a main/master → build → push DOCR → deploy vía SSH
 # Requiere: deployment iam-service aplicado en K8s, secrets DOCR_TOKEN, SSH_PRIVATE_KEY, DROPLET_IP
 #
+# ⏸️ EN STANDBY (2026-07-05): deshabilitado manualmente en GitHub Actions
+# (`gh workflow disable`). El repo se migró (2026-06-24) sin llevarse ningún secret —
+# venía fallando en el login a DOCR en los últimos 3 pushes. En vez de resetear los
+# secrets de Digital Ocean, el owner decidió dejarlo en pausa: el destino real de
+# producción va a ser DonWeb (PLAT-E13, VPS aún sin contratar), no vale la pena
+# resucitar credenciales de un droplet DO que se va a reemplazar. Re-habilitar con
+# `gh workflow enable "Deploy iam-service to Production"` si se decide seguir
+# deployando a DO mientras tanto.
+#
 # ⚠️ Drift: kubectl set image modifica el deployment en vivo pero NO el YAML del repo.
 #
 # S2S keys: este servicio lee S2S_KEY_WHATSAPP_AGENT, S2S_KEY_ONBOARDING,
