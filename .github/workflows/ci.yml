@@ -1,13 +1,17 @@
-# CI incremental — corre solo los tests de los paquetes que el diff de la PR afectó
-# (PLAT-E21 T3). Usa scripts/affected-packages.sh (T2): un solo salto de dependientes
-# directos, con fallback a todo el módulo si go.mod/go.sum cambió.
+# CI incremental — corre solo los tests de los paquetes que el diff afectó (PLAT-E21 T3).
+# Usa scripts/affected-packages.sh (T2): un solo salto de dependientes directos, con
+# fallback a todo el módulo si go.mod/go.sum cambió.
 #
 # NO reemplaza el `go test ./...` completo de deploy.yml en push a main/master — ese
-# sigue siendo la red de seguridad previa al deploy. Este job es exclusivo de PRs.
+# sigue siendo la red de seguridad previa al deploy. Dispara también en push directo
+# (no solo pull_request) porque el owner trabaja solo en todo el lab y no abre PRs —
+# sin esto el job quedaría inerte.
 
 name: CI
 
 on:
+  push:
+    branches: [main, master]
   pull_request:
     branches: [main, master]
 
