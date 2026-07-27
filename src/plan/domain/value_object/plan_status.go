@@ -38,3 +38,5 @@ func (p PlanStatus) IsActive() bool {
 func (p PlanStatus) CanBeAssigned() bool {
 	return p == PlanStatusActive
 }
+
+// PLAT-E21 T4: verificación temporal de CI incremental (rama descartable).
