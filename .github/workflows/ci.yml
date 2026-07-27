@@ -57,8 +57,11 @@ jobs:
           else
             echo "count=$(printf '%s\n' "${PACKAGES}" | wc -l | tr -d ' ')" >> "$GITHUB_OUTPUT"
           fi
+          # Total del módulo — para reportar cuántos paquetes se saltaron (T4).
+          echo "total=$(go list ./... | wc -l | tr -d ' ')" >> "$GITHUB_OUTPUT"
 
       - name: Run tests (affected packages only)
+        id: run-tests
         if: steps.affected.outputs.count != '0'
         env:
           AFFECTED_PACKAGES: ${{ steps.affected.outputs.packages }}
@@ -66,8 +69,15 @@ jobs:
         run: |
           echo "Corriendo ${AFFECTED_COUNT} paquete(s) afectado(s):"
           echo "${AFFECTED_PACKAGES}"
+          START=$(date +%s)
+          set +e
           # shellcheck disable=SC2086
           go test -race -timeout 120s ${AFFECTED_PACKAGES}
+          RC=$?
+          set -e
+          # Duración escrita SIEMPRE (incluso si los tests fallan) para el reporte de T4.
+          echo "duration_s=$(( $(date +%s) - START ))" >> "$GITHUB_OUTPUT"
+          exit $RC
 
       - name: Run vet (affected packages only)
         if: steps.affected.outputs.count != '0'
@@ -80,3 +90,50 @@ jobs:
       - name: No affected packages
         if: steps.affected.outputs.count == '0'
         run: echo "El diff no tocó .go/go.mod/go.sum — nada que testear."
+
+      # PLAT-E21 T4 — reporte de métricas de ejecución: qué corrió, qué se saltó, tiempo total.
+      # Escribe al job summary (pestaña del job) y espeja a stdout como evidencia en el log.
+      - name: Execution metrics summary
+        if: always()
+        env:
+          AFFECTED_PACKAGES: ${{ steps.affected.outputs.packages }}
+          AFFECTED_COUNT: ${{ steps.affected.outputs.count }}
+          TOTAL_COUNT: ${{ steps.affected.outputs.total }}
+          DURATION_S: ${{ steps.run-tests.outputs.duration_s }}
+          TEST_OUTCOME: ${{ steps.run-tests.outcome }}
+        run: |
+          RAN="${AFFECTED_COUNT:-0}"
+          TOTAL="${TOTAL_COUNT:-?}"
+          if [ "${TOTAL}" != "?" ] && [ -n "${RAN}" ]; then
+            SKIPPED=$(( TOTAL - RAN ))
+          else
+            SKIPPED="?"
+          fi
+          if [ "${RAN}" = "0" ]; then
+            DUR="0 (nada que testear)"
+            OUTCOME="skipped (sin paquetes afectados)"
+          else
+            DUR="${DURATION_S:-?}s"
+            OUTCOME="${TEST_OUTCOME:-desconocido}"
+          fi
+          {
+            echo "## CI incremental — métricas de ejecución (PLAT-E21 T4)"
+            echo ""
+            echo "| Métrica | Valor |"
+            echo "|---|---|"
+            echo "| Paquetes del módulo | ${TOTAL} |"
+            echo "| Corridos (afectados por el diff) | ${RAN} |"
+            echo "| Salteados | ${SKIPPED} |"
+            echo "| Resultado de los tests | ${OUTCOME} |"
+            echo "| Tiempo de tests | ${DUR} |"
+            echo ""
+            if [ "${RAN}" != "0" ]; then
+              echo "<details><summary>Paquetes corridos</summary>"
+              echo ""
+              echo '```'
+              printf '%s\n' "${AFFECTED_PACKAGES}"
+              echo '```'
+              echo ""
+              echo "</details>"
+            fi
+          } | tee -a "$GITHUB_STEP_SUMMARY"
