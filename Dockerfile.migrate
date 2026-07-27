@@ -1,10 +1,13 @@
 # IAM Migrate - Job image para ejecutar migraciones en K8s
-# Alpine + postgresql-client (~25MB) en lugar de postgres:15-alpine (~109MB) por quota DOCR
+# debian:bookworm-slim + postgresql-client — sin Alpine (estandarización del lab, ver
+# skills/dev/dockerfile-audit/SKILL.md)
 # Build: docker build -f Dockerfile.migrate -t iam-migrate:latest .
 
-FROM alpine:3.19
+FROM debian:bookworm-slim
 
-RUN apk add --no-cache bash postgresql-client
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    bash postgresql-client ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY migrations /migrations
 COPY scripts /scripts

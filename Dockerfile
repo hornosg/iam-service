@@ -5,11 +5,13 @@
 # ==============================================
 # Stage 1: Dependencies and cache optimization
 # ==============================================
-FROM golang:1.25-alpine AS deps
+FROM golang:1.25-bookworm AS deps
 WORKDIR /app
 
 # Install build dependencies
-RUN apk add --no-cache git ca-certificates tzdata
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git ca-certificates tzdata \
+    && rm -rf /var/lib/apt/lists/*
 
 # Configure private Go modules
 ARG GITHUB_TOKEN
@@ -45,9 +47,10 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
 # ==============================================
 FROM deps AS development
 
-RUN apk add --no-cache curl && \
-    go install github.com/air-verse/air@v1.61.7 && \
-    addgroup -S appgroup && adduser -S appuser -G appgroup
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && go install github.com/air-verse/air@v1.61.7 \
+    && groupadd -r appgroup && useradd -r -g appgroup appuser
 
 WORKDIR /app
 
