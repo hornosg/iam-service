@@ -162,14 +162,23 @@ func (h *RoleHandler) ListRoles(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// RegisterRoutes registra las rutas del módulo role
-func (h *RoleHandler) RegisterRoutes(router *gin.RouterGroup) {
-	roles := router.Group("/roles")
+// RegisterRoutes registra las rutas del módulo role.
+//
+// ACC-E02 T10: `roles` es un catálogo global (sin RLS, sin tenant_id). La
+// escritura (POST/PUT/DELETE) se registra en writeRouter, gated por
+// `system:admin`; la lectura (GET) en readRouter, legible por autenticado con
+// scope `tenant:admin` o `system:admin`. Sin este corte, un `tenant:admin`
+// podía crearse un rol `SYSTEM_ADMIN` y mutar los roles de sistema existentes.
+func (h *RoleHandler) RegisterRoutes(readRouter, writeRouter *gin.RouterGroup) {
+	reads := readRouter.Group("/roles")
 	{
-		roles.POST("", h.CreateRole)
-		roles.GET("/:id", h.GetRoleByID)
-		roles.PUT("/:id", h.UpdateRole)
-		roles.DELETE("/:id", h.DeleteRole)
-		roles.GET("", h.ListRoles)
+		reads.GET("", h.ListRoles)
+		reads.GET("/:id", h.GetRoleByID)
+	}
+	writes := writeRouter.Group("/roles")
+	{
+		writes.POST("", h.CreateRole)
+		writes.PUT("/:id", h.UpdateRole)
+		writes.DELETE("/:id", h.DeleteRole)
 	}
 }

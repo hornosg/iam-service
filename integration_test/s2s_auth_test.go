@@ -122,7 +122,7 @@ func newTestS2SServer(t *testing.T) *testS2SServer {
 	_ = userFinderService
 	_ = tenantFeaturesUC
 	planConfig.SetupPlanModule(adminGroup, db)
-	roleConfig.SetupRoleModule(tenantScopedGroup, db)
+	roleConfig.SetupRoleModule(tenantScopedGroup, adminGroup, db)
 
 	// Grupo de provision: POST /tenants con scope tenant:provision o system:admin.
 	provisionGroup := apiV1.Group("", authFactory.RequireScopes([]s2s.Scope{s2s.ScopeTenantProvision, s2s.ScopeSystemAdmin}, "system_admin"))

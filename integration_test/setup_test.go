@@ -90,7 +90,7 @@ func newTestServer(t *testing.T) *testServer {
 	apiV1 := router.Group("/api/v1")
 	tenantConfig.SetupTenantScopedModule(apiV1, db, noopMetricsRecorder{})
 	tenantConfig.SetupTenantProvisionModule(apiV1, db, noopMetricsRecorder{})
-	roleConfig.SetupRoleModule(apiV1, db)
+	roleConfig.SetupRoleModule(apiV1, apiV1, db)
 	planConfig.SetupPlanModule(apiV1, db)
 
 	srv := httptest.NewServer(router)

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 
+	"github.com/hornosg/go-shared/criteria"
 	"iam/src/role/domain/entity"
 	"iam/src/role/domain/value_object"
 
@@ -466,4 +467,39 @@ func (r *MockRoleRepository) CountByType(ctx context.Context, roleType value_obj
 	}
 
 	return count, nil
+}
+
+// SearchByCriteria implementa criteria.CriteriaRepository[entity.Role].
+// Devuelve todos los roles (ignora filtros/paginación): suficiente para tests
+// de wiring del handler, donde lo que se verifica es el gate de scope, no el
+// filtrado por criterios.
+func (r *MockRoleRepository) SearchByCriteria(ctx context.Context, crit criteria.Criteria) ([]*entity.Role, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	r.incrementCallCount("SearchByCriteria")
+
+	if r.shouldMethodFail("SearchByCriteria") {
+		return nil, ErrMockFailedOp
+	}
+
+	roles := make([]*entity.Role, 0, len(r.roles))
+	for _, role := range r.roles {
+		roles = append(roles, r.cloneRole(role))
+	}
+	return roles, nil
+}
+
+// CountByCriteria implementa criteria.CriteriaRepository[entity.Role].
+func (r *MockRoleRepository) CountByCriteria(ctx context.Context, crit criteria.Criteria) (int, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	r.incrementCallCount("CountByCriteria")
+
+	if r.shouldMethodFail("CountByCriteria") {
+		return 0, ErrMockFailedOp
+	}
+
+	return len(r.roles), nil
 }

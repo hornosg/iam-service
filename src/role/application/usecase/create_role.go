@@ -27,14 +27,10 @@ func (uc *CreateRoleUseCase) Execute(ctx context.Context, req *request.CreateRol
 		return nil, exception.ErrInvalidRoleType
 	}
 
-	// Obtener tenant ID si se proporciona
-	tenantID, err := req.GetTenantID()
-	if err != nil {
-		return nil, exception.ErrInvalidTenant
-	}
-
-	// Verificar que no existe un rol con el mismo nombre en el mismo tenant
-	exists, err := uc.roleRepo.ExistsByName(ctx, req.Name, tenantID)
+	// ACC-E02 T10: `roles` es un catálogo global sin tenant_id. La unicidad de
+	// nombre es global (constraint roles_name_unique), por lo que ExistsByName
+	// no recibe tenant.
+	exists, err := uc.roleRepo.ExistsByName(ctx, req.Name, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -42,8 +38,8 @@ func (uc *CreateRoleUseCase) Execute(ctx context.Context, req *request.CreateRol
 		return nil, exception.ErrRoleAlreadyExists
 	}
 
-	// Crear la entidad
-	role := entity.NewRole(req.Name, req.Description, roleType, tenantID)
+	// Crear la entidad (sin tenant: roles globales)
+	role := entity.NewRole(req.Name, req.Description, roleType, nil)
 
 	// Agregar permisos si se proporcionaron
 	for _, permission := range req.Permissions {

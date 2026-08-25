@@ -31,8 +31,8 @@ func NewPostgresRoleRepository(db *sql.DB) port.RoleCriteriaRepository {
 // Create inserta un nuevo rol en la base de datos
 func (r *PostgresRoleRepository) Create(ctx context.Context, role *entity.Role) error {
 	query := `
-		INSERT INTO roles (id, name, description, type, tenant_id, permissions, is_active, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO roles (id, name, description, type, permissions, is_active, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`
 
 	_, err := r.db.ExecContext(ctx, query,
@@ -40,7 +40,6 @@ func (r *PostgresRoleRepository) Create(ctx context.Context, role *entity.Role) 
 		role.Name,
 		role.Description,
 		role.Type.String(),
-		role.TenantID,
 		pq.Array(role.Permissions),
 		role.IsActive,
 		role.CreatedAt,
@@ -48,9 +47,9 @@ func (r *PostgresRoleRepository) Create(ctx context.Context, role *entity.Role) 
 	)
 
 	if err != nil {
-		// Verificar si es error de constraint de nombre único por tenant
+		// Verificar si es error de constraint de nombre único global (ACC-E02 T10)
 		if pqErr, ok := err.(*pq.Error); ok {
-			if pqErr.Code == "23505" && pqErr.Constraint == "roles_name_tenant_unique" {
+			if pqErr.Code == "23505" && pqErr.Constraint == "roles_name_unique" {
 				return exception.ErrRoleAlreadyExists
 			}
 		}
@@ -63,7 +62,7 @@ func (r *PostgresRoleRepository) Create(ctx context.Context, role *entity.Role) 
 // GetByID obtiene un rol por su ID
 func (r *PostgresRoleRepository) GetByID(ctx context.Context, id uuid.UUID) (*entity.Role, error) {
 	query := `
-		SELECT id, name, description, type, tenant_id, permissions, is_active, created_at, updated_at
+		SELECT id, name, description, type, permissions, is_active, created_at, updated_at
 		FROM roles
 		WHERE id = $1
 	`
@@ -72,15 +71,17 @@ func (r *PostgresRoleRepository) GetByID(ctx context.Context, id uuid.UUID) (*en
 	return r.scanRole(row)
 }
 
-// GetByName obtiene un rol por nombre y tenant
+// GetByName obtiene un rol por nombre. ACC-E02 T10: `roles` es catálogo global,
+// sin tenant_id; el parámetro tenantID se conserva por compatibilidad de interfaz
+// pero se ignora (la unicidad de nombre es global).
 func (r *PostgresRoleRepository) GetByName(ctx context.Context, name string, tenantID *uuid.UUID) (*entity.Role, error) {
 	query := `
-		SELECT id, name, description, type, tenant_id, permissions, is_active, created_at, updated_at
+		SELECT id, name, description, type, permissions, is_active, created_at, updated_at
 		FROM roles
-		WHERE name = $1 AND (tenant_id = $2 OR ($2 IS NULL AND tenant_id IS NULL))
+		WHERE name = $1
 	`
 
-	row := r.db.QueryRowContext(ctx, query, name, tenantID)
+	row := r.db.QueryRowContext(ctx, query, name)
 	return r.scanRole(row)
 }
 
@@ -88,8 +89,8 @@ func (r *PostgresRoleRepository) GetByName(ctx context.Context, name string, ten
 func (r *PostgresRoleRepository) Update(ctx context.Context, role *entity.Role) error {
 	query := `
 		UPDATE roles
-		SET name = $2, description = $3, type = $4, tenant_id = $5, permissions = $6, 
-		    is_active = $7, updated_at = $8
+		SET name = $2, description = $3, type = $4, permissions = $5,
+		    is_active = $6, updated_at = $7
 		WHERE id = $1
 	`
 
@@ -98,7 +99,6 @@ func (r *PostgresRoleRepository) Update(ctx context.Context, role *entity.Role) 
 		role.Name,
 		role.Description,
 		role.Type.String(),
-		role.TenantID,
 		pq.Array(role.Permissions),
 		role.IsActive,
 		role.UpdatedAt,
@@ -148,7 +148,7 @@ func (r *PostgresRoleRepository) Delete(ctx context.Context, id uuid.UUID) error
 // GetByType obtiene roles por tipo
 func (r *PostgresRoleRepository) GetByType(ctx context.Context, roleType value_object.RoleType) ([]*entity.Role, error) {
 	query := `
-		SELECT id, name, description, type, tenant_id, permissions, is_active, created_at, updated_at
+		SELECT id, name, description, type, permissions, is_active, created_at, updated_at
 		FROM roles
 		WHERE type = $1
 		ORDER BY created_at DESC
@@ -163,31 +163,21 @@ func (r *PostgresRoleRepository) GetByType(ctx context.Context, roleType value_o
 	return r.scanRoles(rows)
 }
 
-// GetByTenant obtiene roles por tenant con paginación
+// GetByTenant obtiene roles por tenant con paginación.
+// ACC-E02 T10: `roles` es catálogo global sin tenant_id; no existen roles de
+// tenant, por lo que devuelve siempre un conjunto vacío. El parámetro tenantID
+// se conserva por compatibilidad de interfaz. (Método no cableado a ninguna ruta.)
 func (r *PostgresRoleRepository) GetByTenant(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*entity.Role, error) {
-	query := `
-		SELECT id, name, description, type, tenant_id, permissions, is_active, created_at, updated_at
-		FROM roles
-		WHERE tenant_id = $1
-		ORDER BY created_at DESC
-		LIMIT $2 OFFSET $3
-	`
-
-	rows, err := r.db.QueryContext(ctx, query, tenantID, limit, offset)
-	if err != nil {
-		return nil, fmt.Errorf("error querying roles by tenant: %w", err)
-	}
-	defer rows.Close()
-
-	return r.scanRoles(rows)
+	return []*entity.Role{}, nil
 }
 
-// GetSystemRoles obtiene roles de sistema
+// GetSystemRoles obtiene roles de sistema.
+// ACC-E02 T10: con tenant_id dropeada, todos los roles son globales (antes
+// `WHERE tenant_id IS NULL`); el método ahora devuelve todos los roles.
 func (r *PostgresRoleRepository) GetSystemRoles(ctx context.Context) ([]*entity.Role, error) {
 	query := `
-		SELECT id, name, description, type, tenant_id, permissions, is_active, created_at, updated_at
+		SELECT id, name, description, type, permissions, is_active, created_at, updated_at
 		FROM roles
-		WHERE tenant_id IS NULL
 		ORDER BY created_at DESC
 	`
 
@@ -200,37 +190,24 @@ func (r *PostgresRoleRepository) GetSystemRoles(ctx context.Context) ([]*entity.
 	return r.scanRoles(rows)
 }
 
-// GetActiveRoles obtiene roles activos con filtro opcional por tenant
+// GetActiveRoles obtiene roles activos.
+// ACC-E02 T10: sin tenant_id, el filtro por tenant deja de aplicar; el
+// parámetro tenantID se conserva por compatibilidad de interfaz y se ignora.
 func (r *PostgresRoleRepository) GetActiveRoles(ctx context.Context, tenantID *uuid.UUID, limit, offset int) ([]*entity.Role, error) {
 	var query string
 	var args []interface{}
 
-	if tenantID != nil {
-		query = `
-			SELECT id, name, description, type, tenant_id, permissions, is_active, created_at, updated_at
-			FROM roles
-			WHERE is_active = true AND tenant_id = $1
-			ORDER BY created_at DESC
-		`
-		args = []interface{}{*tenantID}
-	} else {
-		query = `
-			SELECT id, name, description, type, tenant_id, permissions, is_active, created_at, updated_at
-			FROM roles
-			WHERE is_active = true
-			ORDER BY created_at DESC
-		`
-	}
+	query = `
+		SELECT id, name, description, type, permissions, is_active, created_at, updated_at
+		FROM roles
+		WHERE is_active = true
+		ORDER BY created_at DESC
+	`
 
 	// Agregar paginación si se especifica
 	if limit > 0 {
-		if tenantID != nil {
-			query += " LIMIT $2 OFFSET $3"
-			args = append(args, limit, offset)
-		} else {
-			query += " LIMIT $1 OFFSET $2"
-			args = append(args, limit, offset)
-		}
+		query += " LIMIT $1 OFFSET $2"
+		args = append(args, limit, offset)
 	}
 
 	rows, err := r.db.QueryContext(ctx, query, args...)
@@ -245,7 +222,7 @@ func (r *PostgresRoleRepository) GetActiveRoles(ctx context.Context, tenantID *u
 // List obtiene roles con paginación
 func (r *PostgresRoleRepository) List(ctx context.Context, limit, offset int) ([]*entity.Role, error) {
 	query := `
-		SELECT id, name, description, type, tenant_id, permissions, is_active, created_at, updated_at
+		SELECT id, name, description, type, permissions, is_active, created_at, updated_at
 		FROM roles
 		ORDER BY created_at DESC
 		LIMIT $1 OFFSET $2
@@ -260,12 +237,13 @@ func (r *PostgresRoleRepository) List(ctx context.Context, limit, offset int) ([
 	return r.scanRoles(rows)
 }
 
-// ExistsByName verifica si existe un rol con el nombre dado en el tenant especificado
+// ExistsByName verifica si existe un rol con el nombre dado.
+// ACC-E02 T10: unicidad global de nombre; tenantID se ignora (compatibilidad de interfaz).
 func (r *PostgresRoleRepository) ExistsByName(ctx context.Context, name string, tenantID *uuid.UUID) (bool, error) {
-	query := `SELECT EXISTS(SELECT 1 FROM roles WHERE name = $1 AND (tenant_id = $2 OR ($2 IS NULL AND tenant_id IS NULL)))`
+	query := `SELECT EXISTS(SELECT 1 FROM roles WHERE name = $1)`
 
 	var exists bool
-	err := r.db.QueryRowContext(ctx, query, name, tenantID).Scan(&exists)
+	err := r.db.QueryRowContext(ctx, query, name).Scan(&exists)
 	if err != nil {
 		return false, fmt.Errorf("error checking if role exists: %w", err)
 	}
@@ -286,17 +264,11 @@ func (r *PostgresRoleRepository) Count(ctx context.Context) (int, error) {
 	return count, nil
 }
 
-// CountByTenant cuenta roles por tenant
+// CountByTenant cuenta roles por tenant.
+// ACC-E02 T10: sin tenant_id, no hay roles de tenant; devuelve 0. (Método no
+// cableado a ninguna ruta.)
 func (r *PostgresRoleRepository) CountByTenant(ctx context.Context, tenantID uuid.UUID) (int, error) {
-	query := `SELECT COUNT(*) FROM roles WHERE tenant_id = $1`
-
-	var count int
-	err := r.db.QueryRowContext(ctx, query, tenantID).Scan(&count)
-	if err != nil {
-		return 0, fmt.Errorf("error counting roles by tenant: %w", err)
-	}
-
-	return count, nil
+	return 0, nil
 }
 
 // CountByType cuenta roles por tipo
@@ -323,7 +295,6 @@ func (r *PostgresRoleRepository) scanRole(row *sql.Row) (*entity.Role, error) {
 		&role.Name,
 		&role.Description,
 		&typeStr,
-		&role.TenantID,
 		&permissionsArray,
 		&role.IsActive,
 		&role.CreatedAt,
@@ -364,7 +335,6 @@ func (r *PostgresRoleRepository) scanRoles(rows *sql.Rows) ([]*entity.Role, erro
 			&role.Name,
 			&role.Description,
 			&typeStr,
-			&role.TenantID,
 			&permissionsArray,
 			&role.IsActive,
 			&role.CreatedAt,
@@ -398,7 +368,7 @@ func (r *PostgresRoleRepository) scanRoles(rows *sql.Rows) ([]*entity.Role, erro
 // SearchByCriteria busca roles usando criterios
 func (r *PostgresRoleRepository) SearchByCriteria(ctx context.Context, crit criteria.Criteria) ([]*entity.Role, error) {
 	baseQuery := `
-		SELECT id, name, description, type, tenant_id, permissions, is_active, created_at, updated_at
+		SELECT id, name, description, type, permissions, is_active, created_at, updated_at
 		FROM roles
 	`
 

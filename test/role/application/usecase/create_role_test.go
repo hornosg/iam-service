@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -22,12 +21,10 @@ func TestCreateRoleUseCase_Execute_HappyPath_CreatesRole(t *testing.T) {
 	createUseCase := usecase.NewCreateRoleUseCase(mockRepo)
 	ctx := context.Background()
 
-	tenantID := uuid.New().String()
 	req := &request.CreateRoleRequest{
 		Name:        "Manager",
 		Description: "Rol de gerente con permisos especiales",
 		Type:        "CUSTOM",
-		TenantID:    &tenantID,
 		Permissions: []string{"read:products", "write:products"},
 	}
 
@@ -57,7 +54,6 @@ func TestCreateRoleUseCase_Execute_SystemRole_NilTenantID(t *testing.T) {
 		Name:        "System Admin",
 		Description: "Administrador del sistema completo",
 		Type:        "SYSTEM_ADMIN",
-		TenantID:    nil,
 		Permissions: []string{"system:admin"},
 	}
 
@@ -88,7 +84,6 @@ func TestCreateRoleUseCase_Execute_DuplicateName_ReturnsError(t *testing.T) {
 		Name:        "Existing Role",
 		Description: "Intento de duplicado de rol",
 		Type:        "CUSTOM",
-		TenantID:    nil,
 	}
 
 	// Act
@@ -119,29 +114,6 @@ func TestCreateRoleUseCase_Execute_InvalidType_ReturnsError(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, resp)
 	assert.Equal(t, exception.ErrInvalidRoleType, err)
-}
-
-func TestCreateRoleUseCase_Execute_InvalidTenantID_ReturnsError(t *testing.T) {
-	// Arrange
-	mockRepo := repository.NewMockRoleRepository()
-	createUseCase := usecase.NewCreateRoleUseCase(mockRepo)
-	ctx := context.Background()
-
-	badTenantID := "not-a-uuid"
-	req := &request.CreateRoleRequest{
-		Name:        "Role",
-		Description: "Descripcion del rol de prueba",
-		Type:        "CUSTOM",
-		TenantID:    &badTenantID,
-	}
-
-	// Act
-	resp, err := createUseCase.Execute(ctx, req)
-
-	// Assert
-	assert.Error(t, err)
-	assert.Nil(t, resp)
-	assert.Equal(t, exception.ErrInvalidTenant, err)
 }
 
 func TestCreateRoleUseCase_Execute_RepoFails_ReturnsError(t *testing.T) {

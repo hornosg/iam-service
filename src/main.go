@@ -135,8 +135,8 @@ func main() {
 	// de Kong: estos endpoints confiaban en el gateway, cuyo fallback anónimo los
 	// dejaba abiertos (ej. GET /api/v1/tenants sin token → 200). Servicios S2S
 	// autorizan por X-API-Key + scope; humanos por JWT + rol.
-	//   - adminGroup       (cross-tenant global): plans → system:admin
-	//   - tenantScopedGroup (tenant-scoped):      users, roles, tenants/:id → system:admin or tenant:admin
+	//   - adminGroup       (cross-tenant global): plans, roles (escritura) → system:admin
+	//   - tenantScopedGroup (tenant-scoped):      users, tenants/:id, roles (lectura) → system:admin or tenant:admin
 	//
 	// El registro S2S carga una credencial por servicio consumidor desde
 	// S2S_KEY_<SERVICE>. Política de scopes vive en código (s2s.ServicePolicy).
@@ -173,8 +173,14 @@ func main() {
 	// 5. Plan Module (independiente)
 	planConfig.SetupPlanModule(adminGroup, db)
 
-	// 6. Role Module (independiente)
-	roleConfig.SetupRoleModule(tenantScopedGroup, db)
+	// 6. Role Module (catálogo global, ACC-E02 T10). `roles` no lleva RLS ni
+	//    tenant_id: el gate de scope es la única defensa de la tabla. Las rutas
+	//    de lectura (GET /roles, GET /roles/:id) quedan en tenantScopedGroup
+	//    (legibles por system:admin o tenant:admin); las de escritura
+	//    (POST/PUT/DELETE) pasan a adminGroup (system:admin únicamente), cerrando
+	//    la escalada por la que un tenant:admin podía crearse un rol SYSTEM_ADMIN
+	//    y mutar los roles de sistema existentes.
+	roleConfig.SetupRoleModule(tenantScopedGroup, adminGroup, db)
 
 	// 7. Tenant Provision Module — SOLO POST /tenants para whatsapp-agent/onboarding con scope tenant:provision.
 	// También permitimos system:admin (es un super-scope) para no forzar a sales

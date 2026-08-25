@@ -22,8 +22,9 @@ func NewRoleCriteriaBuilder() *RoleCriteriaBuilder {
 func (b *RoleCriteriaBuilder) FromContext(c *gin.Context) *RoleCriteriaBuilder {
 	b.builder = b.helper.BuildBaseFromContext(c)
 
-	// Filtros específicos de roles (tabla usa is_active, no status)
-	b.builder.AddUUIDFilter("tenant_id", c.Query("tenant_id"))
+	// Filtros específicos de roles (tabla usa is_active, no status).
+	// ACC-E02 T10: `roles` es catálogo global sin tenant_id; se quitó el filtro
+	// por tenant_id (generaría SQL contra una columna inexistente).
 	b.builder.AddEqualFilter("type", c.Query("type"))
 	b.builder.AddLikeFilter("name", c.Query("name"))
 
@@ -52,7 +53,7 @@ func (b *RoleCriteriaBuilder) Build() crit.Criteria {
 func (b *RoleCriteriaBuilder) GetAllowedFields() []string {
 	return []string{
 		"id", "name", "description", "type", "is_active",
-		"tenant_id", "created_at", "updated_at",
+		"created_at", "updated_at",
 	}
 }
 
