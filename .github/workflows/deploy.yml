@@ -2,14 +2,24 @@
 # Push a main/master → build → push DOCR → deploy vía SSH
 # Requiere: deployment iam-service aplicado en K8s, secrets DOCR_TOKEN, SSH_PRIVATE_KEY, DROPLET_IP
 #
-# ⏸️ EN STANDBY (2026-07-05): deshabilitado manualmente en GitHub Actions
-# (`gh workflow disable`). El repo se migró (2026-06-24) sin llevarse ningún secret —
-# venía fallando en el login a DOCR en los últimos 3 pushes. En vez de resetear los
-# secrets de Digital Ocean, el owner decidió dejarlo en pausa: el destino real de
-# producción va a ser DonWeb (PLAT-E13, VPS aún sin contratar), no vale la pena
-# resucitar credenciales de un droplet DO que se va a reemplazar. Re-habilitar con
-# `gh workflow enable "Deploy iam-service to Production"` si se decide seguir
-# deployando a DO mientras tanto.
+# 🛑 APAGADO (2026-08-27): el trigger `push` fue REMOVIDO del archivo, además del
+# `gh workflow disable` que ya estaba puesto desde 2026-07-05. Son dos candados
+# independientes a propósito: el de GitHub se puede revertir con un click y el repo
+# volvería a deployar solo al primer push a master.
+#
+# Decisión del owner: no se vuelve a pagar Digital Ocean hasta tener el servicio
+# corriendo local y probado al 100%. El destino real de producción va a ser DonWeb
+# (PLAT-E13, VPS aún sin contratar), así que no hay ninguna razón para resucitar
+# las credenciales de un droplet DO que además está apagado.
+#
+# Contexto original (2026-07-05): el repo se migró (2026-06-24) sin llevarse ningún
+# secret y venía fallando en el login a DOCR en los últimos 3 pushes.
+#
+# Para reactivarlo hacen falta LOS DOS pasos, en este orden:
+#   1. devolver el bloque `push: branches: [main, master]` a `on:`
+#   2. `gh workflow enable "Deploy iam-service to Production"`
+# Queda `workflow_dispatch` para poder correrlo a mano si alguna vez hace falta,
+# pero eso requiere intención explícita: nunca dispara solo.
 #
 # ⚠️ Drift: kubectl set image modifica el deployment en vivo pero NO el YAML del repo.
 #
@@ -25,8 +35,9 @@
 name: Deploy iam-service to Production
 
 on:
-  push:
-    branches: [main, master]
+  # push: REMOVIDO a propósito (2026-08-27) — ver el bloque 🛑 APAGADO de arriba.
+  # No devolver este trigger sin decisión explícita del owner: reactivarlo hace que
+  # el próximo push a master gaste plata en Digital Ocean.
   workflow_dispatch:
 
 env:

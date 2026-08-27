@@ -2,10 +2,14 @@
 # Usa scripts/affected-packages.sh (T2): un solo salto de dependientes directos, con
 # fallback a todo el módulo si go.mod/go.sum cambió.
 #
-# NO reemplaza el `go test ./...` completo de deploy.yml en push a main/master — ese
-# sigue siendo la red de seguridad previa al deploy. Dispara también en push directo
-# (no solo pull_request) porque el owner trabaja solo en todo el lab y no abre PRs —
-# sin esto el job quedaría inerte.
+# Dispara también en push directo (no solo pull_request) porque el owner trabaja solo
+# en todo el lab y no abre PRs — sin esto el job quedaría inerte.
+#
+# ⚠️ Este es HOY el único workflow que corre en push. El `go test ./...` completo vivía
+# en deploy.yml, que está apagado desde 2026-07-05 (y sin trigger `push` desde
+# 2026-08-27, ver su cabecera). O sea: en push a master corre el subconjunto afectado,
+# no la suite entera. Si eso no alcanza, el lugar de la suite completa es acá, no
+# resucitar deploy.yml.
 
 name: CI
 
@@ -86,6 +90,20 @@ jobs:
         run: |
           # shellcheck disable=SC2086
           go vet ${AFFECTED_PACKAGES}
+
+      # PLAT-E21 T5 — gate de cobertura del diff vs coverage-baseline.json.
+      # Corre los tests afectados con -coverpkg=./src/... (caveat T1: tests externos en
+      # test/...), mide la cobertura de las líneas NUEVAS/MODIFICADAS del diff y falla
+      # el job si queda por debajo del umbral coverage_percent del baseline. Self-contained
+      # (corre su propio coverprofile) para no alterar el paso de tests de T3 (verificado);
+      # soporta --coverprofile para reusar el de T3 si se quiere evitar la doble corrida.
+      - name: Coverage gate (diff vs baseline)
+        if: steps.affected.outputs.count != '0' && steps.run-tests.outcome == 'success'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          ./scripts/coverage-gate.sh "${BASE_SHA}" "${HEAD_SHA}"
 
       - name: No affected packages
         if: steps.affected.outputs.count == '0'
