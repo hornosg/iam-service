@@ -25,7 +25,7 @@ func NewLogoutUseCase(authRepo port.AuthRepository, securityLogger sharedport.Se
 
 func (uc *LogoutUseCase) Execute(ctx context.Context, userID uuid.UUID, claims *value_object.TokenClaims) error {
 	if claims != nil && claims.JTI != uuid.Nil {
-		expiresAt := time.Unix(claims.ExpiresAt, 0)
+		expiresAt := time.Unix(claims.ExpiresAt, 0).UTC()
 		_ = uc.authRepo.RevokeToken(ctx, claims.JTI, userID, expiresAt)
 	}
 
