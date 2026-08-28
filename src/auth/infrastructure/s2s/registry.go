@@ -159,3 +159,44 @@ func ServiceNameFromEnv(envVar string) (string, error) {
 	name := strings.ToLower(strings.TrimPrefix(envVar, prefix))
 	return strings.ReplaceAll(name, "_", "-"), nil
 }
+
+// ScopeLabel devuelve una etiqueta legible para un scope, agrupando los scopes
+// administrativos bajo una sola categoría de reporting. Es de uso diagnóstico
+// (logs/métricas) y no afecta el control de acceso.
+func ScopeLabel(s Scope) string {
+	switch s {
+	case ScopeTenantProvision:
+		return "provision"
+	case ScopeTenantAdmin:
+		return "tenant-admin"
+	case ScopeSystemAdmin:
+		return "system-admin"
+	default:
+		return "unknown"
+	}
+}
+
+// SummarizeScopes devuelve un resumen compacto de los scopes de una credencial,
+// deduplicando etiquetas y ordenando para que el output sea determinista.
+func (c *Credential) SummarizeScopes() string {
+	if c == nil {
+		return ""
+	}
+	seen := make(map[string]bool)
+	var labels []string
+	for _, s := range c.Scopes {
+		label := ScopeLabel(s)
+		if !seen[label] {
+			seen[label] = true
+			labels = append(labels, label)
+		}
+	}
+	if len(labels) == 0 {
+		return "none"
+	}
+	result := labels[0]
+	for _, l := range labels[1:] {
+		result += "," + l
+	}
+	return result
+}
