@@ -155,3 +155,54 @@ jobs:
               echo "</details>"
             fi
           } | tee -a "$GITHUB_STEP_SUMMARY"
+
+  # PLAT-E21 T6 — gate arquitectural. Wirea go-hex-audit como check obligatorio de CI,
+  # no on-demand. Es un Go test versionado (test/arch/arch_test.go) que corre en cada
+  # `go test` y acá en cada push/PR, y falla el job si:
+  #   1. hay un package con segmento `port` fuera de `domain/` (criterio literal de T6);
+  #   2. domain importa application/infrastructure/api del módulo o libs de infra
+  #      (gorm, database/sql, pgx, net/http, gin, ...); application importa
+  #      infrastructure/api del módulo o esas libs.
+  # Job separado de test-affected para que su señal sea independiente (un fallo de
+  # arquitectura no se enmascara detrás de un fallo de tests, ni al revés). Corre SIEMPRE
+  # —la arquitectura es un invariante global, no diff-local.
+  #
+  # ⚠ -count=1 es OBLIGATORIO: arch_test.go no importa ningún package de src/, así que
+  # el test binary no cambia cuando cambia src/ y `go test` devolvería PASS cacheado sin
+  # correr → el gate quedaría silenciosamente inerte (incluso en CI, donde GOCACHE
+  # persiste entre runs). Sin -count=1 el gate NO caza violaciones. Es la trampa
+  # "silently disabled" que go-hex-audit §2 advierte sobre tests de arquitectura.
+  architecture:
+    runs-on: ubuntu-latest
+    env:
+      GOPRIVATE: github.com/mercadocercano
+      GONOSUMDB: github.com/mercadocercano
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Configure private modules
+        # go list ./src/... resuelve el grafo completo, incluido go-shared (privado).
+        run: |
+          git config --global url."https://${{ secrets.GO_PRIVATE_TOKEN }}@github.com/".insteadOf "https://github.com/"
+
+      - name: Architecture gate (hex/DDD)
+        run: |
+          echo "=== Architecture gate (PLAT-E21 T6) — go-hex-audit como check obligatorio ==="
+          go test -count=1 -v ./test/arch/...
+
+      - name: Architecture gate — summary
+        if: always()
+        run: |
+          {
+            echo "## Architecture gate (PLAT-E21 T6)"
+            echo ""
+            echo "Check hexagonal versionado (test/arch/arch_test.go): ports fuera de domain/, regla de dependencia domain/application, libs de infra en domain/application. Corre con -count=1 (sin cache) en cada push/PR."
+          } | tee -a "$GITHUB_STEP_SUMMARY"
