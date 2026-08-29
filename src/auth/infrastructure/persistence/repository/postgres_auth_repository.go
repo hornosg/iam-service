@@ -11,6 +11,8 @@ import (
 	"iam/src/auth/domain/entity"
 	"iam/src/auth/domain/port"
 	"iam/src/auth/domain/value_object"
+	sharedctx "iam/src/shared/context"
+	sharedpostgres "iam/src/shared/postgres"
 )
 
 type PostgresAuthRepository struct {
@@ -23,13 +25,28 @@ func NewPostgresAuthRepository(db *sql.DB) port.AuthRepository {
 	}
 }
 
-// CreateRefreshToken almacena un nuevo refresh token
+type execer interface {
+	ExecContext(context.Context, string, ...interface{}) (sql.Result, error)
+}
+
+// CreateRefreshToken almacena un nuevo refresh token. Si el contexto porta un
+// tenant_id, la inserción corre bajo account_app con SET LOCAL app.tenant_id
+// para que la policy RLS de refresh_tokens permita la fila (ACC-E02 T4/T5).
 func (r *PostgresAuthRepository) CreateRefreshToken(ctx context.Context, token *entity.RefreshToken) error {
+	if tenantID, ok := sharedctx.TenantIDFromContext(ctx); ok {
+		return sharedpostgres.WithRLSInTransaction(ctx, r.db, tenantID, func(ctx context.Context, tx *sql.Tx) error {
+			return r.createRefreshToken(ctx, tx, token)
+		})
+	}
+	return r.createRefreshToken(ctx, r.db, token)
+}
+
+func (r *PostgresAuthRepository) createRefreshToken(ctx context.Context, db execer, token *entity.RefreshToken) error {
 	query := `
-		INSERT INTO refresh_tokens (id, user_id, token, expires_at, created_at) 
+		INSERT INTO refresh_tokens (id, user_id, token, expires_at, created_at)
 		VALUES ($1, $2, $3, $4, $5)`
 
-	_, err := r.db.ExecContext(ctx, query,
+	_, err := db.ExecContext(ctx, query,
 		token.ID,
 		token.UserID,
 		token.Token,
@@ -187,14 +204,25 @@ func (r *PostgresAuthRepository) GetUserByFederatedID(ctx context.Context, provi
 	return user, nil
 }
 
-// LinkFederatedID vincula un ID federado a un usuario existente
+// LinkFederatedID vincula un ID federado a un usuario existente. ACC-E02 T5:
+// este UPDATE se ejecuta post-auth bajo account_app con RLS, nunca bajo
+// iam_login (T1-D1). Si el contexto no trae tenant_id, falla closed.
 func (r *PostgresAuthRepository) LinkFederatedID(ctx context.Context, userID uuid.UUID, provider value_object.AuthProvider, federatedID string) error {
+	if tenantID, ok := sharedctx.TenantIDFromContext(ctx); ok {
+		return sharedpostgres.WithRLSInTransaction(ctx, r.db, tenantID, func(ctx context.Context, tx *sql.Tx) error {
+			return r.linkFederatedID(ctx, tx, userID, provider, federatedID)
+		})
+	}
+	return r.linkFederatedID(ctx, r.db, userID, provider, federatedID)
+}
+
+func (r *PostgresAuthRepository) linkFederatedID(ctx context.Context, db execer, userID uuid.UUID, provider value_object.AuthProvider, federatedID string) error {
 	query := `
-		UPDATE users 
+		UPDATE users
 		SET provider = $1, federated_id = $2, updated_at = CURRENT_TIMESTAMP
 		WHERE id = $3`
 
-	_, err := r.db.ExecContext(ctx, query, provider, federatedID, userID)
+	_, err := db.ExecContext(ctx, query, provider, federatedID, userID)
 	if err != nil {
 		return fmt.Errorf("error vinculando ID federado: %w", err)
 	}

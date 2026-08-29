@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log"
 	"os"
 
@@ -21,6 +22,8 @@ import (
 	tenantConfig "iam/src/tenant/infrastructure/config"
 	userConfig "iam/src/user/infrastructure/config"
 	"iam/src/shared/validator"
+	userRepo "iam/src/user/infrastructure/persistence/repository"
+	userUC "iam/src/user/application/usecase"
 
 	sharedport "github.com/hornosg/go-shared/domain/port"
 	sharedlog "github.com/hornosg/go-shared/infrastructure/logging"
@@ -35,16 +38,22 @@ func init() {
 }
 
 func main() {
-	// Configuración de la base de datos
-	db, err := setupDatabase()
+	// Configuración de la base de datos: dos pools según ACC-E02 T2/T5.
+	//   * appDB: account_app — rol de aplicación con RLS (todo caso de uso
+	//     con tenant conocido y operaciones post-auth del login).
+	//   * loginDB: iam_login — rol acotado de pre-auth; sólo resuelve
+	//     credenciales sin filtro de tenant (T1-D1, T1-D2).
+	appDB, loginDB, err := setupDatabases()
 	if err != nil {
 		log.Fatalf("Error connecting to database: %v", err)
 	}
-	defer db.Close()
+	defer appDB.Close()
+	defer loginDB.Close()
 
 	// Migraciones versionadas in-app (ADR-001) — fail-fast antes de servir tráfico.
+	// Corren sobre el rol de aplicación; las migraciones 017/018/019 son idempotentes.
 	dbName := env.Get("DB_NAME", "iam_db")
-	if err := sharedmigrate.RunMigrations(db, iamroot.MigrationsFS, dbName); err != nil {
+	if err := sharedmigrate.RunMigrations(appDB, iamroot.MigrationsFS, dbName); err != nil {
 		log.Fatalf("Error running migrations: %v", err)
 	}
 
@@ -152,26 +161,31 @@ func main() {
 	tenantScopedGroup := apiV1.Group("", authFactory.RequireScopes([]s2s.Scope{s2s.ScopeSystemAdmin, s2s.ScopeTenantAdmin}, "tenant_admin", "system_admin"))
 
 	// Configurar módulos en orden de dependencias
-	// 1. User Module (independiente) - retorna UserFinderService
-	userFinderService := userConfig.SetupUserModule(tenantScopedGroup, db)
+	// 1. User Module (independiente) - retorna UserFinderService con account_app.
+	userFinderService := userConfig.SetupUserModule(tenantScopedGroup, appDB)
+
+	// User finder para la fase pre-auth del login (iam_login). No registra rutas;
+	// sólo se inyecta en el LoginUseCase.
+	loginUserRepo := userRepo.NewPostgresUserRepository(loginDB)
+	loginUserFinder := userUC.NewUserFinderUseCase(loginUserRepo)
 
 	// 2. Tenant Management Module (tenant-scoped): lectura/escritura por ID
 	//    GET/PUT/DELETE /tenants/:id se mueven al grupo tenant-scoped para que
 	//    servicios como onboarding (tenant:admin) puedan gestionar sus propios
 	//    tenants sin necesitar system:admin. List/Plan/Features quedan en adminGroup.
-	tenantConfig.SetupTenantScopedModule(tenantScopedGroup, db, metricsRecorder)
+	tenantConfig.SetupTenantScopedModule(tenantScopedGroup, appDB, metricsRecorder)
 
 	// 3. Tenant Admin Module (cross-tenant global): list, plans, features → system:admin
-	tenantFeaturesUC := tenantConfig.SetupTenantModule(adminGroup, db, metricsRecorder)
+	tenantFeaturesUC := tenantConfig.SetupTenantModule(adminGroup, appDB, metricsRecorder)
 
 	// 4. Auth Module (depende de User y Tenant)
 	// El adapter convierte tenant_vo.TenantFeatures → auth_vo.TenantFeatures (anti-corruption layer)
 	tenantService := adapter.NewTenantFeaturesAdapter(tenantFeaturesUC)
 	authConfig := config.NewAuthModuleConfigFromEnv()
-	config.SetupAuthModule(apiV1, db, userFinderService, tenantService, authConfig)
+	config.SetupAuthModule(apiV1, appDB, loginDB, userFinderService, loginUserFinder, tenantService, authConfig)
 
 	// 5. Plan Module (independiente)
-	planConfig.SetupPlanModule(adminGroup, db)
+	planConfig.SetupPlanModule(adminGroup, appDB)
 
 	// 6. Role Module (catálogo global, ACC-E02 T10). `roles` no lleva RLS ni
 	//    tenant_id: el gate de scope es la única defensa de la tabla. Las rutas
@@ -180,13 +194,13 @@ func main() {
 	//    (POST/PUT/DELETE) pasan a adminGroup (system:admin únicamente), cerrando
 	//    la escalada por la que un tenant:admin podía crearse un rol SYSTEM_ADMIN
 	//    y mutar los roles de sistema existentes.
-	roleConfig.SetupRoleModule(tenantScopedGroup, adminGroup, db)
+	roleConfig.SetupRoleModule(tenantScopedGroup, adminGroup, appDB)
 
 	// 7. Tenant Provision Module — SOLO POST /tenants para whatsapp-agent/onboarding con scope tenant:provision.
 	// También permitimos system:admin (es un super-scope) para no forzar a sales
 	// a tener una key separada de tenant:provision mientras migran.
 	provisionGroup := apiV1.Group("", authFactory.RequireScopes([]s2s.Scope{s2s.ScopeTenantProvision, s2s.ScopeSystemAdmin}, "system_admin"))
-	tenantConfig.SetupTenantProvisionModule(provisionGroup, db, metricsRecorder)
+	tenantConfig.SetupTenantProvisionModule(provisionGroup, appDB, metricsRecorder)
 
 	// Iniciar el servidor
 	port := env.Get("PORT", "8080")
@@ -196,32 +210,54 @@ func main() {
 	}
 }
 
-func setupDatabase() (*sql.DB, error) {
-	// Configuración de la base de datos desde variables de entorno
+func setupDatabases() (appDB *sql.DB, loginDB *sql.DB, err error) {
+	// Configuración compartida de la base de datos desde variables de entorno.
 	host := env.Get("DB_HOST", "localhost")
 	port := env.Get("DB_PORT", "5432")
-	user := env.Get("DB_USER", "postgres")
-	password := env.Get("DB_PASSWORD", "postgres")
+	// ACC-E02 T5: cada pool tiene su propia credencial. Un único password
+	// compartido haría que comprometer iam_login (pre-auth) entregue account_app.
+	appPassword := env.Get("DB_PASSWORD", "lab_account_app")
+	loginPassword := env.Get("DB_LOGIN_PASSWORD", "lab_iam_login")
 	dbname := env.Get("DB_NAME", "iam_db")
 	sslmode := env.Get("DB_SSLMODE", "disable")
 
-	db, err := postgres.Connect(postgres.Config{
+	// Pool de aplicación: account_app (RLS, todo excepto lookup de credencial).
+	appUser := env.Get("DB_USER", "account_app")
+	appDB, err = postgres.Connect(postgres.Config{
 		Host:     host,
 		Port:     port,
-		User:     user,
-		Password: password,
+		User:     appUser,
+		Password: appPassword,
 		DBName:   dbname,
 		SSLMode:  sslmode,
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, fmt.Errorf("connect account_app: %w", err)
 	}
-
-	postgres.StartPoolMonitor(context.Background(), db, postgres.MonitorOptions{
+	postgres.StartPoolMonitor(context.Background(), appDB, postgres.MonitorOptions{
 		Service: "iam-service",
 		DBName:  dbname,
 	})
 
-	log.Println("Successfully connected to database")
-	return db, nil
+	// Pool de login: iam_login (sólo resuelve credenciales pre-auth).
+	loginUser := env.Get("DB_LOGIN_USER", "iam_login")
+	loginDB, err = postgres.Connect(postgres.Config{
+		Host:     host,
+		Port:     port,
+		User:     loginUser,
+		Password: loginPassword,
+		DBName:   dbname,
+		SSLMode:  sslmode,
+	})
+	if err != nil {
+		_ = appDB.Close()
+		return nil, nil, fmt.Errorf("connect iam_login: %w", err)
+	}
+	postgres.StartPoolMonitor(context.Background(), loginDB, postgres.MonitorOptions{
+		Service: "iam-service-login",
+		DBName:  dbname,
+	})
+
+	log.Printf("Successfully connected to database as app=%s login=%s", appUser, loginUser)
+	return appDB, loginDB, nil
 }

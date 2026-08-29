@@ -84,7 +84,7 @@ func TestLoginUseCase_Execute_ValidLocalLogin_ReturnsTokens(t *testing.T) {
 	}
 	jwtSvc := adapter.NewJWTServiceAdapter("test-secret-key-for-testing-purposes")
 
-	loginUseCase := usecase.NewLoginUseCase(config, mockAuthRepo, mockUserService, mockTenantService, jwtSvc, NewMockRoleResolver(), NewMockPlanResolver(),NewMockGoogleTokenVerifier(), sharedlog.NewSecurityLoggerWithWriter("iam-test", io.Discard))
+	loginUseCase := usecase.NewLoginUseCase(config, mockAuthRepo, mockAuthRepo, mockUserService, mockTenantService, jwtSvc, NewMockRoleResolver(), NewMockPlanResolver(), NewMockGoogleTokenVerifier(), sharedlog.NewSecurityLoggerWithWriter("iam-test", io.Discard))
 
 	userID := uuid.New()
 	tenantID := uuid.New()
@@ -138,7 +138,7 @@ func TestLoginUseCase_Execute_InvalidPassword_ReturnsError(t *testing.T) {
 	}
 	jwtSvc := adapter.NewJWTServiceAdapter("test-secret-key-for-testing-purposes")
 
-	loginUseCase := usecase.NewLoginUseCase(config, mockAuthRepo, mockUserService, mockTenantService, jwtSvc, NewMockRoleResolver(), NewMockPlanResolver(),NewMockGoogleTokenVerifier(), sharedlog.NewSecurityLoggerWithWriter("iam-test", io.Discard))
+	loginUseCase := usecase.NewLoginUseCase(config, mockAuthRepo, mockAuthRepo, mockUserService, mockTenantService, jwtSvc, NewMockRoleResolver(), NewMockPlanResolver(), NewMockGoogleTokenVerifier(), sharedlog.NewSecurityLoggerWithWriter("iam-test", io.Discard))
 
 	userID := uuid.New()
 	tenantID := uuid.New()
@@ -185,7 +185,7 @@ func TestLoginUseCase_Execute_UserNotFound_ReturnsError(t *testing.T) {
 	}
 	jwtSvc := adapter.NewJWTServiceAdapter("test-secret-key-for-testing-purposes")
 
-	loginUseCase := usecase.NewLoginUseCase(config, mockAuthRepo, mockUserService, mockTenantService, jwtSvc, NewMockRoleResolver(), NewMockPlanResolver(),NewMockGoogleTokenVerifier(), sharedlog.NewSecurityLoggerWithWriter("iam-test", io.Discard))
+	loginUseCase := usecase.NewLoginUseCase(config, mockAuthRepo, mockAuthRepo, mockUserService, mockTenantService, jwtSvc, NewMockRoleResolver(), NewMockPlanResolver(), NewMockGoogleTokenVerifier(), sharedlog.NewSecurityLoggerWithWriter("iam-test", io.Discard))
 
 	tenantID := uuid.New()
 
@@ -218,7 +218,7 @@ func TestLoginUseCase_Execute_GoogleUser_WithLocalAuth_ReturnsError(t *testing.T
 	}
 	jwtSvc := adapter.NewJWTServiceAdapter("test-secret-key-for-testing-purposes")
 
-	loginUseCase := usecase.NewLoginUseCase(config, mockAuthRepo, mockUserService, mockTenantService, jwtSvc, NewMockRoleResolver(), NewMockPlanResolver(),NewMockGoogleTokenVerifier(), sharedlog.NewSecurityLoggerWithWriter("iam-test", io.Discard))
+	loginUseCase := usecase.NewLoginUseCase(config, mockAuthRepo, mockAuthRepo, mockUserService, mockTenantService, jwtSvc, NewMockRoleResolver(), NewMockPlanResolver(), NewMockGoogleTokenVerifier(), sharedlog.NewSecurityLoggerWithWriter("iam-test", io.Discard))
 
 	userID := uuid.New()
 	tenantID := uuid.New()
@@ -263,7 +263,7 @@ func TestLoginUseCase_Execute_InvalidProvider_ReturnsError(t *testing.T) {
 	}
 	jwtSvc := adapter.NewJWTServiceAdapter("test-secret")
 
-	loginUseCase := usecase.NewLoginUseCase(config, mockAuthRepo, mockUserService, mockTenantService, jwtSvc, NewMockRoleResolver(), NewMockPlanResolver(),NewMockGoogleTokenVerifier(), sharedlog.NewSecurityLoggerWithWriter("iam-test", io.Discard))
+	loginUseCase := usecase.NewLoginUseCase(config, mockAuthRepo, mockAuthRepo, mockUserService, mockTenantService, jwtSvc, NewMockRoleResolver(), NewMockPlanResolver(), NewMockGoogleTokenVerifier(), sharedlog.NewSecurityLoggerWithWriter("iam-test", io.Discard))
 
 	loginReq := &request.LoginRequest{
 		Email:    "test@example.com",
@@ -291,7 +291,7 @@ func TestLoginUseCase_Execute_MissingPassword_ReturnsError(t *testing.T) {
 	}
 	jwtSvc := adapter.NewJWTServiceAdapter("test-secret")
 
-	loginUseCase := usecase.NewLoginUseCase(config, mockAuthRepo, mockUserService, mockTenantService, jwtSvc, NewMockRoleResolver(), NewMockPlanResolver(),NewMockGoogleTokenVerifier(), sharedlog.NewSecurityLoggerWithWriter("iam-test", io.Discard))
+	loginUseCase := usecase.NewLoginUseCase(config, mockAuthRepo, mockAuthRepo, mockUserService, mockTenantService, jwtSvc, NewMockRoleResolver(), NewMockPlanResolver(), NewMockGoogleTokenVerifier(), sharedlog.NewSecurityLoggerWithWriter("iam-test", io.Discard))
 
 	loginReq := &request.LoginRequest{
 		Email:    "test@example.com",
@@ -320,7 +320,7 @@ func TestLoginUseCase_Execute_TenantMismatch_ReturnsError(t *testing.T) {
 	}
 	jwtSvc := adapter.NewJWTServiceAdapter("test-secret-key-for-testing-purposes")
 
-	loginUseCase := usecase.NewLoginUseCase(config, mockAuthRepo, mockUserService, mockTenantService, jwtSvc, NewMockRoleResolver(), NewMockPlanResolver(),NewMockGoogleTokenVerifier(), sharedlog.NewSecurityLoggerWithWriter("iam-test", io.Discard))
+	loginUseCase := usecase.NewLoginUseCase(config, mockAuthRepo, mockAuthRepo, mockUserService, mockTenantService, jwtSvc, NewMockRoleResolver(), NewMockPlanResolver(), NewMockGoogleTokenVerifier(), sharedlog.NewSecurityLoggerWithWriter("iam-test", io.Discard))
 
 	userID := uuid.New()
 	userTenantID := uuid.New()
@@ -369,7 +369,7 @@ func TestLoginUseCase_Execute_GoogleLogin_ValidToken_ReturnsTokens(t *testing.T)
 	}
 	jwtSvc := adapter.NewJWTServiceAdapter("test-secret-key-for-testing-purposes")
 
-	loginUseCase := usecase.NewLoginUseCase(config, mockAuthRepo, mockUserService, mockTenantService, jwtSvc, NewMockRoleResolver(), NewMockPlanResolver(),mockGoogleVerifier, sharedlog.NewSecurityLoggerWithWriter("iam-test", io.Discard))
+	loginUseCase := usecase.NewLoginUseCase(config, mockAuthRepo, mockAuthRepo, mockUserService, mockTenantService, jwtSvc, NewMockRoleResolver(), NewMockPlanResolver(), mockGoogleVerifier, sharedlog.NewSecurityLoggerWithWriter("iam-test", io.Discard))
 
 	userID := uuid.New()
 	tenantID := uuid.New()
@@ -420,7 +420,7 @@ func TestLoginUseCase_Execute_GoogleLogin_InvalidToken_ReturnsError(t *testing.T
 	}
 	jwtSvc := adapter.NewJWTServiceAdapter("test-secret-key-for-testing-purposes")
 
-	loginUseCase := usecase.NewLoginUseCase(config, mockAuthRepo, mockUserService, mockTenantService, jwtSvc, NewMockRoleResolver(), NewMockPlanResolver(),mockGoogleVerifier, sharedlog.NewSecurityLoggerWithWriter("iam-test", io.Discard))
+	loginUseCase := usecase.NewLoginUseCase(config, mockAuthRepo, mockAuthRepo, mockUserService, mockTenantService, jwtSvc, NewMockRoleResolver(), NewMockPlanResolver(), mockGoogleVerifier, sharedlog.NewSecurityLoggerWithWriter("iam-test", io.Discard))
 
 	mockGoogleVerifier.SetupError(errors.New("token de Google inválido"))
 

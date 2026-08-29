@@ -21,8 +21,16 @@ services:
     environment:
       DB_HOST: lab-postgres
       DB_PORT: 5432
-      DB_USER: ${POSTGRES_USER:-postgres}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      # ACC-E02 T5: dos credenciales DISTINTAS, no dos usuarios con el mismo
+      # password. Si compartieran secreto, comprometer la credencial pre-auth
+      # (iam_login, la superficie expuesta al mundo) entregaría account_app y
+      # el split de roles no aislaría nada.
+      # Los defaults son de LAB. En prod se overridean por env (pendiente de
+      # definir dónde viven: no van en este archivo).
+      DB_USER: account_app
+      DB_PASSWORD: ${IAM_APP_DB_PASSWORD:-lab_account_app}
+      DB_LOGIN_USER: iam_login
+      DB_LOGIN_PASSWORD: ${IAM_LOGIN_DB_PASSWORD:-lab_iam_login}
       DB_NAME: iam_db
       DB_SSLMODE: disable
       GIN_MODE: debug

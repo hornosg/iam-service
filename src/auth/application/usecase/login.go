@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 
 	"iam/src/auth/application/request"
@@ -15,6 +16,7 @@ import (
 	"iam/src/auth/domain/entity"
 	"iam/src/auth/domain/port"
 	"iam/src/auth/domain/value_object"
+	sharedctx "iam/src/shared/context"
 	sharedport "github.com/hornosg/go-shared/domain/port"
 )
 
@@ -33,8 +35,9 @@ type AuthConfig struct {
 
 type LoginUseCase struct {
 	config              AuthConfig
-	authRepo            port.AuthRepository
-	userService         port.UserService
+	preAuthAuthRepo     port.AuthRepository
+	postAuthAuthRepo    port.AuthRepository
+	preAuthUserService  port.UserService
 	tenantService       port.TenantService
 	jwtService          port.JWTService
 	roleResolver        port.RoleResolver
@@ -45,8 +48,9 @@ type LoginUseCase struct {
 
 func NewLoginUseCase(
 	config AuthConfig,
-	authRepo port.AuthRepository,
-	userService port.UserService,
+	preAuthAuthRepo port.AuthRepository,
+	postAuthAuthRepo port.AuthRepository,
+	preAuthUserService port.UserService,
 	tenantService port.TenantService,
 	jwtService port.JWTService,
 	roleResolver port.RoleResolver,
@@ -56,8 +60,9 @@ func NewLoginUseCase(
 ) *LoginUseCase {
 	return &LoginUseCase{
 		config:              config,
-		authRepo:            authRepo,
-		userService:         userService,
+		preAuthAuthRepo:     preAuthAuthRepo,
+		postAuthAuthRepo:    postAuthAuthRepo,
+		preAuthUserService:  preAuthUserService,
 		tenantService:       tenantService,
 		jwtService:          jwtService,
 		roleResolver:        roleResolver,
@@ -77,13 +82,14 @@ func (uc *LoginUseCase) ExecuteWithInfo(ctx context.Context, req *request.LoginR
 	}
 
 	var user *port.UserData
+	var link *federatedLinkRequest
 	var err error
 
 	switch req.Provider {
 	case value_object.LocalAuth:
 		user, err = uc.loginLocal(ctx, req)
 	case value_object.GoogleAuth:
-		user, err = uc.loginGoogle(ctx, req)
+		user, link, err = uc.loginGoogle(ctx, req)
 	default:
 		return nil, fmt.Errorf("proveedor de autenticación no soportado: %s", req.Provider)
 	}
@@ -114,7 +120,11 @@ func (uc *LoginUseCase) ExecuteWithInfo(ctx context.Context, req *request.LoginR
 		UserAgent: userAgent,
 	})
 
-	// Generar tokens
+	// A partir de acá el tenant YA se conoce: toda operación post-auth corre
+	// bajo account_app con el contexto RLS de ese tenant.
+	ctx = sharedctx.WithTenantID(ctx, user.TenantID)
+
+	// Generar tokens (post-auth, account_app + RLS).
 	accessToken, err := uc.generateAccessToken(ctx, user)
 	if err != nil {
 		return nil, fmt.Errorf("error generando access token: %w", err)
@@ -123,6 +133,13 @@ func (uc *LoginUseCase) ExecuteWithInfo(ctx context.Context, req *request.LoginR
 	refreshToken, err := uc.generateRefreshToken(ctx, user)
 	if err != nil {
 		return nil, fmt.Errorf("error generando refresh token: %w", err)
+	}
+
+	// Vincular ID federado post-auth (T1-D1, T2 carry-forward): nunca bajo iam_login.
+	if link != nil {
+		if err := uc.postAuthAuthRepo.LinkFederatedID(ctx, link.userID, link.provider, link.federatedID); err != nil {
+			return nil, fmt.Errorf("error vinculando ID federado: %w", err)
+		}
 	}
 
 	userData := response.UserData{
@@ -137,7 +154,7 @@ func (uc *LoginUseCase) ExecuteWithInfo(ctx context.Context, req *request.LoginR
 }
 
 func (uc *LoginUseCase) loginLocal(ctx context.Context, req *request.LoginRequest) (*port.UserData, error) {
-	user, err := uc.userService.FindUserByEmail(ctx, req.Email, req.TenantID)
+	user, err := uc.preAuthUserService.FindUserByEmail(ctx, req.Email, req.TenantID)
 	if err != nil {
 		return nil, ErrInvalidCredentials
 	}
@@ -158,37 +175,46 @@ func (uc *LoginUseCase) loginLocal(ctx context.Context, req *request.LoginReques
 	return user, nil
 }
 
-func (uc *LoginUseCase) loginGoogle(ctx context.Context, req *request.LoginRequest) (*port.UserData, error) {
+// federatedLinkRequest describe un linkeo de identidad federada pendiente de
+// ejecutar post-auth, bajo account_app con RLS (T1-D1, T2 carry-forward).
+type federatedLinkRequest struct {
+	userID      uuid.UUID
+	provider    value_object.AuthProvider
+	federatedID string
+}
+
+func (uc *LoginUseCase) loginGoogle(ctx context.Context, req *request.LoginRequest) (*port.UserData, *federatedLinkRequest, error) {
 	claims, err := uc.googleTokenVerifier.Verify(ctx, req.GoogleToken)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	// Buscar usuario por ID federado
-	user, err := uc.authRepo.GetUserByFederatedID(ctx, value_object.GoogleAuth, claims.Sub, req.TenantID)
+	// Buscar usuario por ID federado (pre-auth, iam_login).
+	user, err := uc.preAuthAuthRepo.GetUserByFederatedID(ctx, value_object.GoogleAuth, claims.Sub, req.TenantID)
 	if err == nil {
 		if req.TenantID != nil && *req.TenantID != user.TenantID {
-			return nil, ErrInvalidCredentials
+			return nil, nil, ErrInvalidCredentials
 		}
-		return &user, nil
+		return &user, nil, nil
 	}
 
-	// Si no existe, buscar por email
-	user2, err := uc.userService.FindUserByEmail(ctx, claims.Email, req.TenantID)
+	// Si no existe, buscar por email (pre-auth, iam_login).
+	user2, err := uc.preAuthUserService.FindUserByEmail(ctx, claims.Email, req.TenantID)
 	if err != nil {
-		return nil, ErrUserNotFound
+		return nil, nil, ErrUserNotFound
 	}
 
 	if req.TenantID != nil && *req.TenantID != user2.TenantID {
-		return nil, ErrInvalidCredentials
+		return nil, nil, ErrInvalidCredentials
 	}
 
-	// Vincular ID federado
-	if err := uc.authRepo.LinkFederatedID(ctx, user2.ID, value_object.GoogleAuth, claims.Sub); err != nil {
-		return nil, fmt.Errorf("error vinculando ID federado: %w", err)
+	// El linkeo se ejecuta post-auth bajo account_app (T1-D1).
+	link := &federatedLinkRequest{
+		userID:      user2.ID,
+		provider:    value_object.GoogleAuth,
+		federatedID: claims.Sub,
 	}
-
-	return user2, nil
+	return user2, link, nil
 }
 
 func (uc *LoginUseCase) generateAccessToken(ctx context.Context, user *port.UserData) (string, error) {
@@ -228,7 +254,7 @@ func (uc *LoginUseCase) generateRefreshToken(ctx context.Context, user *port.Use
 		time.Now().Add(uc.config.RefreshTokenExpiry),
 	)
 
-	if err := uc.authRepo.CreateRefreshToken(ctx, refreshToken); err != nil {
+	if err := uc.postAuthAuthRepo.CreateRefreshToken(ctx, refreshToken); err != nil {
 		return "", err
 	}
 

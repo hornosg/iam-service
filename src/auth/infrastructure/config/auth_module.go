@@ -77,8 +77,19 @@ func ValidateJWTSecret(secret string) error {
 	return nil
 }
 
-// SetupAuthModule configura e inicializa el módulo de autenticación
-func SetupAuthModule(router *gin.RouterGroup, db *sql.DB, userService port.UserService, tenantService port.TenantService, config AuthModuleConfig) {
+
+// SetupAuthModule configura e inicializa el módulo de autenticación.
+// ACC-E02 T5: dos pools de DB — appDB (account_app, RLS) para toda operación
+// post-auth y loginDB (iam_login) para la fase pre-auth de credenciales.
+func SetupAuthModule(
+	router *gin.RouterGroup,
+	appDB *sql.DB,
+	loginDB *sql.DB,
+	userService port.UserService,
+	loginUserService port.UserService,
+	tenantService port.TenantService,
+	config AuthModuleConfig,
+) {
 	// Crear configuración para casos de uso
 	authConfig := usecase.AuthConfig{
 		AccessTokenExpiry:  config.AccessTokenExpiry,
@@ -86,28 +97,37 @@ func SetupAuthModule(router *gin.RouterGroup, db *sql.DB, userService port.UserS
 		Namespace:          config.Namespace,
 	}
 
-	// Instanciar repositorio
-	authRepo := repository.NewPostgresAuthRepository(db)
+	// Repositorios: uno por pool. El de login se usa sólo en la fase pre-auth
+	// de POST /auth/login; el de app en refresh/logout/revoke-all y post-auth.
+	authRepoApp := repository.NewPostgresAuthRepository(appDB)
+	authRepoLogin := repository.NewPostgresAuthRepository(loginDB)
 
 	// Instanciar logger de seguridad compartido
 	securityLogger := sharedlog.NewSecurityLogger("iam")
 
-	// Instanciar adapters
+	// Instanciar adapters (todos sobre account_app; el tenant ya se conoce post-auth).
 	jwtService := adapter.NewJWTServiceAdapter(config.JWTSecret)
 	googleVerifier := adapter.NewHTTPGoogleTokenVerifier(config.GoogleClientID)
-	// RoleResolver: resuelve slug+permisos del rol en la emisión (login/refresh) para
-	// poblar los claims `roles`/`perms`. Lee la tabla roles directo (aislamiento de tipos).
-	roleResolver := adapter.NewSQLRoleResolverAdapter(db)
-	// PlanResolver: resuelve el tier del plan del tenant para el claim `plan` (rate limiting
-	// por plan, ADR-003). Lee tenants JOIN plans directo (aislamiento de tipos).
-	planResolver := adapter.NewSQLPlanResolverAdapter(db)
+	roleResolver := adapter.NewSQLRoleResolverAdapter(appDB)
+	planResolver := adapter.NewSQLPlanResolverAdapter(appDB)
 
 	// Instanciar casos de uso
-	loginUseCase := usecase.NewLoginUseCase(authConfig, authRepo, userService, tenantService, jwtService, roleResolver, planResolver, googleVerifier, securityLogger)
-	refreshTokenUseCase := usecase.NewRefreshTokenUseCase(authConfig, authRepo, userService, tenantService, jwtService, roleResolver, planResolver)
+	loginUseCase := usecase.NewLoginUseCase(
+		authConfig,
+		authRepoLogin,
+		authRepoApp,
+		loginUserService,
+		tenantService,
+		jwtService,
+		roleResolver,
+		planResolver,
+		googleVerifier,
+		securityLogger,
+	)
+	refreshTokenUseCase := usecase.NewRefreshTokenUseCase(authConfig, authRepoApp, userService, tenantService, jwtService, roleResolver, planResolver)
 	validateTokenUseCase := usecase.NewValidateTokenUseCase(jwtService)
-	logoutUseCase := usecase.NewLogoutUseCase(authRepo, securityLogger)
-	revokeAllUseCase := usecase.NewRevokeAllUseCase(authRepo, config.AccessTokenExpiry, securityLogger)
+	logoutUseCase := usecase.NewLogoutUseCase(authRepoApp, securityLogger)
+	revokeAllUseCase := usecase.NewRevokeAllUseCase(authRepoApp, config.AccessTokenExpiry, securityLogger)
 
 	// Instanciar controlador
 	authHandler := controller.NewAuthHandler(
@@ -121,7 +141,7 @@ func SetupAuthModule(router *gin.RouterGroup, db *sql.DB, userService port.UserS
 	// Registrar middleware de revocación de tokens
 	router.Use(authmw.TokenRevocationCheck(authmw.TokenRevocationConfig{
 		JWTSecret: config.JWTSecret,
-		AuthRepo:  authRepo,
+		AuthRepo:  authRepoApp,
 		ExcludedRoutes: []string{
 			"/api/v1/auth/login",
 			"/api/v1/auth/refresh",
@@ -134,7 +154,7 @@ func SetupAuthModule(router *gin.RouterGroup, db *sql.DB, userService port.UserS
 
 	// Iniciar goroutine de limpieza de tokens revocados expirados
 	tokenMaintenanceLogger := authlogging.NewTokenMaintenanceLogger("iam")
-	go startRevocationCleanup(authRepo, tokenMaintenanceLogger)
+	go startRevocationCleanup(authRepoApp, tokenMaintenanceLogger)
 }
 
 func startRevocationCleanup(repo port.AuthRepository, logger port.TokenMaintenanceEventLogger) {
