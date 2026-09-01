@@ -11,22 +11,18 @@ import (
 )
 
 func TestNewRole_WithValidParams_CreatesWithDefaults(t *testing.T) {
-	tenantID := uuid.New()
-
-	role := srcEntity.NewRole("Admin", "Admin role", value_object.RoleTypeTenantAdmin, &tenantID)
+	role := srcEntity.NewRole("Admin", "Admin role", value_object.RoleTypeTenantAdmin)
 
 	assert.NotEqual(t, uuid.Nil, role.ID)
 	assert.Equal(t, "Admin", role.Name)
 	assert.Equal(t, value_object.RoleTypeTenantAdmin, role.Type)
-	assert.Equal(t, &tenantID, role.TenantID)
 	assert.Empty(t, role.Permissions)
 	assert.True(t, role.IsActive)
 }
 
-func TestNewRole_SystemRole_NilTenantID(t *testing.T) {
-	role := srcEntity.NewRole("System Admin", "Desc", value_object.RoleTypeSystemAdmin, nil)
+func TestNewRole_SystemRole_IsSystemRole(t *testing.T) {
+	role := srcEntity.NewRole("System Admin", "Desc", value_object.RoleTypeSystemAdmin)
 
-	assert.Nil(t, role.TenantID)
 	assert.True(t, role.IsSystemRole())
 	assert.False(t, role.IsTenantRole())
 }
@@ -85,28 +81,29 @@ func TestRole_HasPermission_NonExistent_ReturnsFalse(t *testing.T) {
 	assert.False(t, role.HasPermission("nonexistent"))
 }
 
-func TestRole_IsSystemRole_NilTenantID_ReturnsTrue(t *testing.T) {
+// ACC-E02 T11: el tipo de sistema se define por Type, no por tenant.
+func TestRole_IsSystemRole_SystemAdmin_ReturnsTrue(t *testing.T) {
 	mother := Create()
 	role := mother.SystemAdmin()
 
 	assert.True(t, role.IsSystemRole())
 }
 
-func TestRole_IsSystemRole_WithTenantID_ReturnsFalse(t *testing.T) {
+func TestRole_IsSystemRole_UserType_ReturnsFalse(t *testing.T) {
 	mother := Create()
 	role := mother.User()
 
 	assert.False(t, role.IsSystemRole())
 }
 
-func TestRole_IsTenantRole_WithTenantID_ReturnsTrue(t *testing.T) {
+func TestRole_IsTenantRole_UserType_ReturnsTrue(t *testing.T) {
 	mother := Create()
 	role := mother.User()
 
 	assert.True(t, role.IsTenantRole())
 }
 
-func TestRole_IsTenantRole_NilTenantID_ReturnsFalse(t *testing.T) {
+func TestRole_IsTenantRole_SystemAdmin_ReturnsFalse(t *testing.T) {
 	mother := Create()
 	role := mother.SystemAdmin()
 

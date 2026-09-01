@@ -8,6 +8,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 
+	sharedctx "iam/src/shared/context"
 	"iam/src/auth/infrastructure/s2s"
 )
 
@@ -133,6 +134,12 @@ func Authorize(jwtSecret, namespace string, registry *s2s.Registry, requiredScop
 		c.Set("roles", roles)
 		if tid, ok := claims["tenant_id"].(string); ok && tid != "" {
 			c.Set("tenant_id", tid)
+			// ACC-E02 T8b: propagar el tenant_id al context.Context de la request para
+			// que los repositorios RLS-sensitivos puedan fijar app.tenant_id via
+			// sharedpostgres.WithRLSInTransaction (patrón PLAT-E29 / tenant-service).
+			if parsed, perr := uuid.Parse(tid); perr == nil {
+				c.Request = c.Request.WithContext(sharedctx.WithTenantID(c.Request.Context(), parsed))
+			}
 		}
 		if uid, ok := claims["user_id"].(string); ok && uid != "" {
 			if parsed, perr := uuid.Parse(uid); perr == nil {

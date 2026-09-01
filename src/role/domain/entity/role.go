@@ -7,25 +7,25 @@ import (
 	"github.com/google/uuid"
 )
 
+// ACC-E02 T11: `roles` es un catálogo global (T1-D5 / T10) — la entidad ya no
+// conoce tenant.
 type Role struct {
 	ID          uuid.UUID
 	Name        string
 	Description string
 	Type        value_object.RoleType
-	TenantID    *uuid.UUID // nil para roles de sistema
 	Permissions []string
 	IsActive    bool
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }
 
-func NewRole(name, description string, roleType value_object.RoleType, tenantID *uuid.UUID) *Role {
+func NewRole(name, description string, roleType value_object.RoleType) *Role {
 	return &Role{
 		ID:          uuid.New(),
 		Name:        name,
 		Description: description,
 		Type:        roleType,
-		TenantID:    tenantID,
 		Permissions: []string{},
 		IsActive:    true,
 		CreatedAt:   time.Now(),

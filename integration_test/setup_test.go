@@ -20,11 +20,16 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 
 	sharedport "github.com/hornosg/go-shared/domain/port"
+	authmw "iam/src/auth/infrastructure/middleware"
+	"iam/src/auth/infrastructure/s2s"
 	planConfig "iam/src/plan/infrastructure/config"
 	roleConfig "iam/src/role/infrastructure/config"
-	tenantConfig "iam/src/tenant/infrastructure/config"
 	"iam/src/shared/validator"
+	tenantConfig "iam/src/tenant/infrastructure/config"
 )
+
+// defaultIntegrationPolicy y las claves S2S viven en s2s_auth_test.go (mismo
+// paquete): los tests de integración comparten política y claves.
 
 // noopMetricsRecorder es un MetricsRecorder que no hace nada. Útil para tests
 // de integración que no necesitan emitir métricas reales.
@@ -47,7 +52,10 @@ func newTestServer(t *testing.T) *testServer {
 
 	pgContainer, err := postgres.Run(ctx,
 		"postgres:16-alpine",
-		postgres.WithDatabase("iam_test"),
+		// ACC-E02 T11: el contenedor usa el nombre `iam_db` porque las
+		// migraciones 017/018 hardcodean `GRANT CONNECT ON DATABASE iam_db`
+		// (carry-forward de T4; misma solución del paquete test/rls).
+		postgres.WithDatabase("iam_db"),
 		postgres.WithUsername("postgres"),
 		postgres.WithPassword("postgres"),
 		testcontainers.WithWaitStrategy(
@@ -87,10 +95,37 @@ func newTestServer(t *testing.T) *testServer {
 	// manualmente los validadores custom (slug, etc.).
 	validator.RegisterCustomValidators()
 
+	// ACC-E02 T11 (nota D5 de T10): el módulo de roles se registra con los
+	// grupos REALES del router de producción — lectura en tenantScopedGroup,
+	// escritura en adminGroup — para que el integration test ejerza el gate de
+	// scope por HTTP, no sólo el unit test de rutas.
+	oldPolicy := s2s.ServicePolicy
+	s2s.ServicePolicy = map[string][]s2s.Scope{
+		"whatsapp-agent":   {s2s.ScopeTenantProvision},
+		"tenant-admin-svc": {s2s.ScopeTenantAdmin},
+		"system-admin-svc": {s2s.ScopeSystemAdmin},
+	}
+	t.Cleanup(func() { s2s.ServicePolicy = oldPolicy })
+
+	registry := s2s.LoadFromEnvForTests(map[string]string{
+		"whatsapp-agent":   keyWhatsappAgent,
+		"tenant-admin-svc": keyTenantAdminSvc,
+		"system-admin-svc": keySystemAdminSvc,
+	})
+	authFactory := authmw.NewScopeMiddlewareFactory("jwt-secret-for-tests-only", testNamespace, registry)
+
 	apiV1 := router.Group("/api/v1")
+	adminGroup := apiV1.Group("", authFactory.RequireScope(s2s.ScopeSystemAdmin, "system_admin"))
+	tenantScopedGroup := apiV1.Group("", authFactory.RequireScopes([]s2s.Scope{s2s.ScopeSystemAdmin, s2s.ScopeTenantAdmin}, "tenant_admin", "system_admin"))
+
 	tenantConfig.SetupTenantScopedModule(apiV1, db, noopMetricsRecorder{})
 	tenantConfig.SetupTenantProvisionModule(apiV1, db, noopMetricsRecorder{})
-	roleConfig.SetupRoleModule(apiV1, apiV1, db)
+	// GET /tenants (listado admin), plan y features viven en adminGroup en
+	// producción (main.go); sin esto el integration test no ejercita el gate
+	// del listado cross-tenant.
+	tenantFeaturesUC := tenantConfig.SetupTenantModule(adminGroup, db, noopMetricsRecorder{})
+	_ = tenantFeaturesUC
+	roleConfig.SetupRoleModule(tenantScopedGroup, adminGroup, db)
 	planConfig.SetupPlanModule(apiV1, db)
 
 	srv := httptest.NewServer(router)
@@ -102,6 +137,17 @@ func newTestServer(t *testing.T) *testServer {
 // runMigrations ejecuta todos los archivos .sql del directorio migrations en orden.
 func runMigrations(t *testing.T, db *sql.DB) {
 	t.Helper()
+
+	// golang-migrate (go-shared/migrate → RunMigrations) crea esta tabla al
+	// inicializar su driver; el runner crudo de integración la necesita
+	// pre-creada porque la migración 018 le hace GRANT.
+	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
+		version bigint NOT NULL PRIMARY KEY,
+		dirty   boolean NOT NULL
+	)`)
+	if err != nil {
+		t.Fatalf("error creating schema_migrations table: %v", err)
+	}
 
 	migrationsDir := findMigrationsDir(t)
 

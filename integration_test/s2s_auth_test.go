@@ -62,7 +62,9 @@ func newTestS2SServer(t *testing.T) *testS2SServer {
 	ctx := context.Background()
 	pgContainer, err := postgres.Run(ctx,
 		"postgres:16-alpine",
-		postgres.WithDatabase("iam_test"),
+		// ACC-E02 T11: mismo fix de nombre que setup_test.go — las migraciones
+		// 017/018 hardcodean `GRANT CONNECT ON DATABASE iam_db` (carry-forward T4).
+		postgres.WithDatabase("iam_db"),
 		postgres.WithUsername("postgres"),
 		postgres.WithPassword("postgres"),
 		testcontainers.WithWaitStrategy(
@@ -136,6 +138,16 @@ func newTestS2SServer(t *testing.T) *testS2SServer {
 
 func runMigrationsForS2S(t *testing.T, db *sql.DB) {
 	t.Helper()
+
+	// Mismo pre-requisito que setup_test.go: la 018 hace GRANT sobre
+	// schema_migrations y el runner crudo no la crea.
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
+		version bigint NOT NULL PRIMARY KEY,
+		dirty   boolean NOT NULL
+	)`); err != nil {
+		t.Fatalf("error creating schema_migrations table: %v", err)
+	}
+
 	migrationsDir := findMigrationsDirForS2S(t)
 	entries, err := os.ReadDir(migrationsDir)
 	require.NoError(t, err)

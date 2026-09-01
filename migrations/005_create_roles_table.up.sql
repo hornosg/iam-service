@@ -25,10 +25,18 @@ CREATE INDEX IF NOT EXISTS idx_roles_name ON roles(name);
 CREATE INDEX IF NOT EXISTS idx_roles_created_at ON roles(created_at);
 
 -- Trigger para actualizar updated_at automáticamente
-CREATE TRIGGER roles_update_updated_at 
-    BEFORE UPDATE ON roles 
-    FOR EACH ROW 
-    EXECUTE FUNCTION update_updated_at_column();
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'roles_update_updated_at'
+    ) THEN
+        CREATE TRIGGER roles_update_updated_at
+            BEFORE UPDATE ON roles
+            FOR EACH ROW
+            EXECUTE FUNCTION update_updated_at_column();
+    END IF;
+END;
+$$;
 
 -- Insertar roles de sistema por defecto
 INSERT INTO roles (name, description, type, tenant_id, permissions) VALUES

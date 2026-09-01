@@ -173,7 +173,7 @@ func TestTenants_GET_List_ReturnsPaginationShape(t *testing.T) {
 	postJSON(t, base+"/tenants", buildCreateTenantBody("Tenant List 1", "tenant-list-1"))
 	postJSON(t, base+"/tenants", buildCreateTenantBody("Tenant List 2", "tenant-list-2"))
 
-	resp := getRequest(t, base+"/tenants?page=1&page_size=10")
+	resp := s2sGet(t, base+"/tenants?page=1&page_size=10", keySystemAdminSvc)
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -192,7 +192,7 @@ func TestTenants_GET_List_DefaultPagination_Returns200(t *testing.T) {
 	srv := newTestServer(t)
 	base := baseURL(srv)
 
-	resp := getRequest(t, base+"/tenants")
+	resp := s2sGet(t, base+"/tenants", keySystemAdminSvc)
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)

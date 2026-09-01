@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -55,30 +54,9 @@ func TestListRolesUseCase_Execute_EmptyResult(t *testing.T) {
 	assert.Empty(t, resp.Roles)
 }
 
-func TestListRolesUseCase_GetByTenant_ReturnsOnlyTenantRoles(t *testing.T) {
-	// Arrange
-	mockRepo := repository.NewMockRoleRepository()
-	listUseCase := usecase.NewListRolesUseCase(mockRepo)
-	ctx := context.Background()
-
-	mother := roleMother.Create()
-	tenantID := uuid.New()
-	role1 := mother.UserForTenant(tenantID)
-	role2 := mother.TenantAdminForTenant(tenantID)
-	role3 := mother.SystemAdmin() // No debe aparecer
-	mockRepo.SetupRoles([]*entity.Role{role1, role2, role3})
-
-	// Act
-	resp, err := listUseCase.GetByTenant(ctx, tenantID, 1, 10)
-
-	// Assert
-	require.NoError(t, err)
-	require.NotNil(t, resp)
-	assert.Equal(t, 1, mockRepo.GetCallCount("GetByTenant"))
-	assert.Equal(t, 1, mockRepo.GetCallCount("CountByTenant"))
-}
-
-func TestListRolesUseCase_GetSystemRoles_ReturnsSystemRoles(t *testing.T) {
+func TestListRolesUseCase_GetSystemRoles_ReturnsGlobalCatalog(t *testing.T) {
+	// ACC-E02 T10/T11: `roles` es catálogo global; GetSystemRoles devuelve
+	// todos los roles (mismo comportamiento que el repositorio Postgres).
 	// Arrange
 	mockRepo := repository.NewMockRoleRepository()
 	listUseCase := usecase.NewListRolesUseCase(mockRepo)
@@ -86,8 +64,8 @@ func TestListRolesUseCase_GetSystemRoles_ReturnsSystemRoles(t *testing.T) {
 
 	mother := roleMother.Create()
 	sysRole := mother.SystemAdmin()
-	tenantRole := mother.User()
-	mockRepo.SetupRoles([]*entity.Role{sysRole, tenantRole})
+	otherRole := mother.Custom()
+	mockRepo.SetupRoles([]*entity.Role{sysRole, otherRole})
 
 	// Act
 	resp, err := listUseCase.GetSystemRoles(ctx)
@@ -96,10 +74,7 @@ func TestListRolesUseCase_GetSystemRoles_ReturnsSystemRoles(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	assert.Equal(t, 1, mockRepo.GetCallCount("GetSystemRoles"))
-	// Solo el rol de sistema deberia estar en la respuesta
-	for _, r := range resp.Roles {
-		assert.True(t, r.IsSystem)
-	}
+	assert.Len(t, resp.Roles, 2)
 }
 
 func TestListRolesUseCase_Execute_ListFails_ReturnsError(t *testing.T) {

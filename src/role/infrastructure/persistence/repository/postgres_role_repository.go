@@ -71,10 +71,9 @@ func (r *PostgresRoleRepository) GetByID(ctx context.Context, id uuid.UUID) (*en
 	return r.scanRole(row)
 }
 
-// GetByName obtiene un rol por nombre. ACC-E02 T10: `roles` es catálogo global,
-// sin tenant_id; el parámetro tenantID se conserva por compatibilidad de interfaz
-// pero se ignora (la unicidad de nombre es global).
-func (r *PostgresRoleRepository) GetByName(ctx context.Context, name string, tenantID *uuid.UUID) (*entity.Role, error) {
+// GetByName obtiene un rol por nombre. ACC-E02 T10: `roles` es catálogo global
+// (sin tenant_id), la unicidad de nombre es global.
+func (r *PostgresRoleRepository) GetByName(ctx context.Context, name string) (*entity.Role, error) {
 	query := `
 		SELECT id, name, description, type, permissions, is_active, created_at, updated_at
 		FROM roles
@@ -163,13 +162,9 @@ func (r *PostgresRoleRepository) GetByType(ctx context.Context, roleType value_o
 	return r.scanRoles(rows)
 }
 
-// GetByTenant obtiene roles por tenant con paginación.
-// ACC-E02 T10: `roles` es catálogo global sin tenant_id; no existen roles de
-// tenant, por lo que devuelve siempre un conjunto vacío. El parámetro tenantID
-// se conserva por compatibilidad de interfaz. (Método no cableado a ninguna ruta.)
-func (r *PostgresRoleRepository) GetByTenant(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*entity.Role, error) {
-	return []*entity.Role{}, nil
-}
+// GetByTenant y CountByTenant fueron eliminadas (ACC-E02 T11): con `roles`
+// como catálogo global no existen roles de tenant y no estaban cableadas a
+// ninguna ruta.
 
 // GetSystemRoles obtiene roles de sistema.
 // ACC-E02 T10: con tenant_id dropeada, todos los roles son globales (antes
@@ -191,9 +186,8 @@ func (r *PostgresRoleRepository) GetSystemRoles(ctx context.Context) ([]*entity.
 }
 
 // GetActiveRoles obtiene roles activos.
-// ACC-E02 T10: sin tenant_id, el filtro por tenant deja de aplicar; el
-// parámetro tenantID se conserva por compatibilidad de interfaz y se ignora.
-func (r *PostgresRoleRepository) GetActiveRoles(ctx context.Context, tenantID *uuid.UUID, limit, offset int) ([]*entity.Role, error) {
+// ACC-E02 T10: sin tenant_id no hay filtro por tenant que aplicar.
+func (r *PostgresRoleRepository) GetActiveRoles(ctx context.Context, limit, offset int) ([]*entity.Role, error) {
 	var query string
 	var args []interface{}
 
@@ -238,8 +232,8 @@ func (r *PostgresRoleRepository) List(ctx context.Context, limit, offset int) ([
 }
 
 // ExistsByName verifica si existe un rol con el nombre dado.
-// ACC-E02 T10: unicidad global de nombre; tenantID se ignora (compatibilidad de interfaz).
-func (r *PostgresRoleRepository) ExistsByName(ctx context.Context, name string, tenantID *uuid.UUID) (bool, error) {
+// ACC-E02 T10: unicidad global de nombre (constraint roles_name_unique).
+func (r *PostgresRoleRepository) ExistsByName(ctx context.Context, name string) (bool, error) {
 	query := `SELECT EXISTS(SELECT 1 FROM roles WHERE name = $1)`
 
 	var exists bool
@@ -262,13 +256,6 @@ func (r *PostgresRoleRepository) Count(ctx context.Context) (int, error) {
 	}
 
 	return count, nil
-}
-
-// CountByTenant cuenta roles por tenant.
-// ACC-E02 T10: sin tenant_id, no hay roles de tenant; devuelve 0. (Método no
-// cableado a ninguna ruta.)
-func (r *PostgresRoleRepository) CountByTenant(ctx context.Context, tenantID uuid.UUID) (int, error) {
-	return 0, nil
 }
 
 // CountByType cuenta roles por tipo

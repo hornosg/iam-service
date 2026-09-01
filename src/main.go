@@ -50,6 +50,18 @@ func main() {
 	defer appDB.Close()
 	defer loginDB.Close()
 
+	// Fail-fast anti-superuser (ACC-E02 T6, patrón PLAT-E29 T7 / RULE-09/RULE-10): el runtime
+	// NUNCA debe correr como superuser/BYPASSRLS. FORCE ROW LEVEL SECURITY no aplica a superusers →
+	// con un rol privilegiado la RLS de users, tenants, refresh_tokens y revoked_tokens queda inerte:
+	// el servicio serviría datos cross-tenant sin error visible. Se verifica en AMBOS pools (T1-D2:
+	// dos pools reales, appDB con account_app y loginDB con iam_login; ambos deben ser NOBYPASSRLS).
+	if err := assertNoRLSBypass(appDB); err != nil {
+		log.Fatalf("%v", err)
+	}
+	if err := assertNoRLSBypass(loginDB); err != nil {
+		log.Fatalf("%v", err)
+	}
+
 	// Migraciones versionadas in-app (ADR-001) — fail-fast antes de servir tráfico.
 	// Corren sobre el rol de aplicación; las migraciones 017/018/019 son idempotentes.
 	dbName := env.Get("DB_NAME", "iam_db")
@@ -260,4 +272,35 @@ func setupDatabases() (appDB *sql.DB, loginDB *sql.DB, err error) {
 
 	log.Printf("Successfully connected to database as app=%s login=%s", appUser, loginUser)
 	return appDB, loginDB, nil
+}
+
+// assertNoRLSBypass aborta el arranque si el rol de base de datos con el que conectamos es
+// superuser o tiene el atributo BYPASSRLS (ACC-E02 T6, patrón PLAT-E29 T7 / RULE-09/RULE-10).
+// Con un rol así, FORCE ROW LEVEL SECURITY no se aplica y la RLS de users, tenants,
+// refresh_tokens y revoked_tokens queda inerte: el servicio serviría datos cross-tenant sin
+// ningún error visible. Convierte ese fail-OPEN silencioso en fail-CLOSED ruidoso. Se corre en
+// AMBAS conexiones (account_app e iam_login) por el modelo de dos pools de T1-D2.
+// ALLOW_SUPERUSER_DB=true es un escape hatch explícito para tareas admin locales — jamás debe
+// usarse en producción.
+func assertNoRLSBypass(db *sql.DB) error {
+	if env.Get("ALLOW_SUPERUSER_DB", "false") == "true" {
+		log.Println("⚠️  ALLOW_SUPERUSER_DB=true — se omite el chequeo NOBYPASSRLS (solo admin/local, NUNCA prod)")
+		return nil
+	}
+
+	var privileged bool
+	if err := db.QueryRow(
+		`SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = current_user`,
+	).Scan(&privileged); err != nil {
+		return fmt.Errorf("no se pudo verificar los privilegios del rol de DB (current_user): %w", err)
+	}
+	if privileged {
+		return fmt.Errorf("negativa a arrancar: el rol de DB actual es SUPERUSER o BYPASSRLS y " +
+			"eludiría la row-level security de users/tenants/refresh_tokens/revoked_tokens " +
+			"(ACC-E02 T6, RULE-09/RULE-10). Usá un rol NOBYPASSRLS como account_app/iam_login, " +
+			"o exportá ALLOW_SUPERUSER_DB=true solo para tareas admin locales")
+	}
+
+	log.Println("RLS guard OK: el rol de DB es NOBYPASSRLS (users, tenants, refresh_tokens y revoked_tokens protegidas por FORCE ROW LEVEL SECURITY)")
+	return nil
 }

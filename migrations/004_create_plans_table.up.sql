@@ -28,10 +28,18 @@ CREATE INDEX IF NOT EXISTS idx_plans_name ON plans(name);
 CREATE INDEX IF NOT EXISTS idx_plans_created_at ON plans(created_at);
 
 -- Trigger para actualizar updated_at automáticamente
-CREATE TRIGGER plans_update_updated_at 
-    BEFORE UPDATE ON plans 
-    FOR EACH ROW 
-    EXECUTE FUNCTION update_updated_at_column();
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'plans_update_updated_at'
+    ) THEN
+        CREATE TRIGGER plans_update_updated_at
+            BEFORE UPDATE ON plans
+            FOR EACH ROW
+            EXECUTE FUNCTION update_updated_at_column();
+    END IF;
+END;
+$$;
 
 -- Insertar planes por defecto
 INSERT INTO plans (name, description, type, max_users, price_month, price_year, features) VALUES

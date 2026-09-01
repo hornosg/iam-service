@@ -23,7 +23,7 @@ var (
 type MockRoleRepository struct {
 	mu            sync.RWMutex
 	roles         map[uuid.UUID]*entity.Role
-	nameIndex     map[string]uuid.UUID // "name:tenantID" -> roleID
+	nameIndex     map[string]uuid.UUID // name -> roleID (unicidad global, ACC-E02 T10)
 	shouldFail    bool
 	failOnMethods map[string]bool
 	callHistory   map[string]int
@@ -85,7 +85,7 @@ func (r *MockRoleRepository) SetupRoles(roles []*entity.Role) {
 	for _, role := range roles {
 		clonedRole := r.cloneRole(role)
 		r.roles[role.ID] = clonedRole
-		r.nameIndex[r.nameKey(role.Name, role.TenantID)] = role.ID
+		r.nameIndex[r.nameKey(role.Name)] = role.ID
 	}
 }
 
@@ -111,12 +111,10 @@ func (r *MockRoleRepository) incrementCallCount(method string) {
 	r.callHistory[method] = r.callHistory[method] + 1
 }
 
-// nameKey genera una clave unica para el indice de nombres
-func (r *MockRoleRepository) nameKey(name string, tenantID *uuid.UUID) string {
-	if tenantID == nil {
-		return name + ":system"
-	}
-	return name + ":" + tenantID.String()
+// nameKey genera una clave unica para el indice de nombres.
+// ACC-E02 T10: unicidad global (sin componente de tenant).
+func (r *MockRoleRepository) nameKey(name string) string {
+	return name
 }
 
 // cloneRole crea una copia profunda de un role
@@ -124,18 +122,11 @@ func (r *MockRoleRepository) cloneRole(role *entity.Role) *entity.Role {
 	permissions := make([]string, len(role.Permissions))
 	copy(permissions, role.Permissions)
 
-	var tenantID *uuid.UUID
-	if role.TenantID != nil {
-		tid := *role.TenantID
-		tenantID = &tid
-	}
-
 	return &entity.Role{
 		ID:          role.ID,
 		Name:        role.Name,
 		Description: role.Description,
 		Type:        role.Type,
-		TenantID:    tenantID,
 		Permissions: permissions,
 		IsActive:    role.IsActive,
 		CreatedAt:   role.CreatedAt,
@@ -154,7 +145,7 @@ func (r *MockRoleRepository) Create(ctx context.Context, role *entity.Role) erro
 		return ErrMockFailedOp
 	}
 
-	key := r.nameKey(role.Name, role.TenantID)
+	key := r.nameKey(role.Name)
 	if _, exists := r.nameIndex[key]; exists {
 		return ErrMockRoleDuplicated
 	}
@@ -190,7 +181,7 @@ func (r *MockRoleRepository) GetByID(ctx context.Context, id uuid.UUID) (*entity
 }
 
 // GetByName implementa la interfaz del repositorio
-func (r *MockRoleRepository) GetByName(ctx context.Context, name string, tenantID *uuid.UUID) (*entity.Role, error) {
+func (r *MockRoleRepository) GetByName(ctx context.Context, name string) (*entity.Role, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -200,7 +191,7 @@ func (r *MockRoleRepository) GetByName(ctx context.Context, name string, tenantI
 		return nil, ErrMockFailedOp
 	}
 
-	key := r.nameKey(name, tenantID)
+	key := r.nameKey(name)
 	roleID, exists := r.nameIndex[key]
 	if !exists {
 		return nil, ErrMockRoleNotFound
@@ -227,8 +218,8 @@ func (r *MockRoleRepository) Update(ctx context.Context, role *entity.Role) erro
 	}
 
 	// Si el nombre cambio, actualizar el indice
-	oldKey := r.nameKey(existingRole.Name, existingRole.TenantID)
-	newKey := r.nameKey(role.Name, role.TenantID)
+	oldKey := r.nameKey(existingRole.Name)
+	newKey := r.nameKey(role.Name)
 	if oldKey != newKey {
 		if _, nameExists := r.nameIndex[newKey]; nameExists {
 			return ErrMockRoleDuplicated
@@ -285,35 +276,6 @@ func (r *MockRoleRepository) GetByType(ctx context.Context, roleType value_objec
 	return roles, nil
 }
 
-// GetByTenant implementa la interfaz del repositorio
-func (r *MockRoleRepository) GetByTenant(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*entity.Role, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	r.incrementCallCount("GetByTenant")
-
-	if r.shouldMethodFail("GetByTenant") {
-		return nil, ErrMockFailedOp
-	}
-
-	var roles []*entity.Role
-	count := 0
-
-	for _, role := range r.roles {
-		if role.TenantID != nil && *role.TenantID == tenantID {
-			if count >= offset {
-				roles = append(roles, r.cloneRole(role))
-				if limit > 0 && len(roles) >= limit {
-					break
-				}
-			}
-			count++
-		}
-	}
-
-	return roles, nil
-}
-
 // GetSystemRoles implementa la interfaz del repositorio
 func (r *MockRoleRepository) GetSystemRoles(ctx context.Context) ([]*entity.Role, error) {
 	r.mu.RLock()
@@ -325,18 +287,18 @@ func (r *MockRoleRepository) GetSystemRoles(ctx context.Context) ([]*entity.Role
 		return nil, ErrMockFailedOp
 	}
 
+	// ACC-E02 T10: con tenant_id dropeada todos los roles son globales; se
+	// devuelven todos (mismo comportamiento que el repositorio Postgres).
 	var roles []*entity.Role
 	for _, role := range r.roles {
-		if role.TenantID == nil {
-			roles = append(roles, r.cloneRole(role))
-		}
+		roles = append(roles, r.cloneRole(role))
 	}
 
 	return roles, nil
 }
 
 // GetActiveRoles implementa la interfaz del repositorio
-func (r *MockRoleRepository) GetActiveRoles(ctx context.Context, tenantID *uuid.UUID, limit, offset int) ([]*entity.Role, error) {
+func (r *MockRoleRepository) GetActiveRoles(ctx context.Context, limit, offset int) ([]*entity.Role, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -353,18 +315,13 @@ func (r *MockRoleRepository) GetActiveRoles(ctx context.Context, tenantID *uuid.
 		if !role.IsActive {
 			continue
 		}
-		matchesTenant := tenantID == nil ||
-			(role.TenantID != nil && *role.TenantID == *tenantID) ||
-			role.TenantID == nil
-		if matchesTenant {
-			if count >= offset {
-				roles = append(roles, r.cloneRole(role))
-				if limit > 0 && len(roles) >= limit {
-					break
-				}
+		if count >= offset {
+			roles = append(roles, r.cloneRole(role))
+			if limit > 0 && len(roles) >= limit {
+				break
 			}
-			count++
 		}
+		count++
 	}
 
 	return roles, nil
@@ -398,7 +355,7 @@ func (r *MockRoleRepository) List(ctx context.Context, limit, offset int) ([]*en
 }
 
 // ExistsByName implementa la interfaz del repositorio
-func (r *MockRoleRepository) ExistsByName(ctx context.Context, name string, tenantID *uuid.UUID) (bool, error) {
+func (r *MockRoleRepository) ExistsByName(ctx context.Context, name string) (bool, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -408,7 +365,7 @@ func (r *MockRoleRepository) ExistsByName(ctx context.Context, name string, tena
 		return false, ErrMockFailedOp
 	}
 
-	key := r.nameKey(name, tenantID)
+	key := r.nameKey(name)
 	_, exists := r.nameIndex[key]
 	return exists, nil
 }
@@ -425,27 +382,6 @@ func (r *MockRoleRepository) Count(ctx context.Context) (int, error) {
 	}
 
 	return len(r.roles), nil
-}
-
-// CountByTenant implementa la interfaz del repositorio
-func (r *MockRoleRepository) CountByTenant(ctx context.Context, tenantID uuid.UUID) (int, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	r.incrementCallCount("CountByTenant")
-
-	if r.shouldMethodFail("CountByTenant") {
-		return 0, ErrMockFailedOp
-	}
-
-	count := 0
-	for _, role := range r.roles {
-		if role.TenantID != nil && *role.TenantID == tenantID {
-			count++
-		}
-	}
-
-	return count, nil
 }
 
 // CountByType implementa la interfaz del repositorio

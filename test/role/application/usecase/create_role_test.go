@@ -44,7 +44,7 @@ func TestCreateRoleUseCase_Execute_HappyPath_CreatesRole(t *testing.T) {
 	assert.Equal(t, 1, mockRepo.GetCallCount("Create"))
 }
 
-func TestCreateRoleUseCase_Execute_SystemRole_NilTenantID(t *testing.T) {
+func TestCreateRoleUseCase_Execute_SystemRole(t *testing.T) {
 	// Arrange
 	mockRepo := repository.NewMockRoleRepository()
 	createUseCase := usecase.NewCreateRoleUseCase(mockRepo)
@@ -76,8 +76,6 @@ func TestCreateRoleUseCase_Execute_DuplicateName_ReturnsError(t *testing.T) {
 
 	mother := roleMother.Create()
 	existing := mother.WithName("Existing Role")
-	// El rol existente es de sistema (nil tenantID)
-	existing.TenantID = nil
 	mockRepo.SetupRoles([]*entity.Role{existing})
 
 	req := &request.CreateRoleRequest{

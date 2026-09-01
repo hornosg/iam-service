@@ -37,7 +37,15 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
-CREATE TRIGGER users_update_updated_at 
-    BEFORE UPDATE ON users 
-    FOR EACH ROW 
-    EXECUTE FUNCTION update_updated_at_column(); 
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'users_update_updated_at'
+    ) THEN
+        CREATE TRIGGER users_update_updated_at
+            BEFORE UPDATE ON users
+            FOR EACH ROW
+            EXECUTE FUNCTION update_updated_at_column();
+    END IF;
+END;
+$$; 

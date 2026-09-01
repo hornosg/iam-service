@@ -28,9 +28,8 @@ func (uc *CreateRoleUseCase) Execute(ctx context.Context, req *request.CreateRol
 	}
 
 	// ACC-E02 T10: `roles` es un catálogo global sin tenant_id. La unicidad de
-	// nombre es global (constraint roles_name_unique), por lo que ExistsByName
-	// no recibe tenant.
-	exists, err := uc.roleRepo.ExistsByName(ctx, req.Name, nil)
+	// nombre es global (constraint roles_name_unique).
+	exists, err := uc.roleRepo.ExistsByName(ctx, req.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -39,7 +38,7 @@ func (uc *CreateRoleUseCase) Execute(ctx context.Context, req *request.CreateRol
 	}
 
 	// Crear la entidad (sin tenant: roles globales)
-	role := entity.NewRole(req.Name, req.Description, roleType, nil)
+	role := entity.NewRole(req.Name, req.Description, roleType)
 
 	// Agregar permisos si se proporcionaron
 	for _, permission := range req.Permissions {

@@ -8,17 +8,16 @@ import (
 )
 
 type RoleResponse struct {
-	ID          uuid.UUID  `json:"id"`
-	Name        string     `json:"name"`
-	Description string     `json:"description"`
-	Type        string     `json:"type"`
-	TenantID    *uuid.UUID `json:"tenant_id,omitempty"`
-	Permissions []string   `json:"permissions"`
-	IsActive    bool       `json:"is_active"`
-	IsSystem    bool       `json:"is_system"`
-	IsTenant    bool       `json:"is_tenant"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
+	ID          uuid.UUID `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	Type        string    `json:"type"`
+	Permissions []string  `json:"permissions"`
+	IsActive    bool      `json:"is_active"`
+	IsSystem    bool      `json:"is_system"`
+	IsTenant    bool      `json:"is_tenant"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 type RoleListResponse struct {
@@ -34,7 +33,6 @@ func NewRoleResponse(role *entity.Role) *RoleResponse {
 		Name:        role.Name,
 		Description: role.Description,
 		Type:        role.Type.String(),
-		TenantID:    role.TenantID,
 		Permissions: role.Permissions,
 		IsActive:    role.IsActive,
 		IsSystem:    role.IsSystemRole(),

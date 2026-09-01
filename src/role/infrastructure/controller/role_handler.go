@@ -58,8 +58,6 @@ func (h *RoleHandler) CreateRole(c *gin.Context) {
 			httpresp.JSON(c, http.StatusConflict, "Role already exists")
 		case exception.ErrInvalidRoleType:
 			httpresp.JSON(c, http.StatusBadRequest, "Invalid role type")
-		case exception.ErrInvalidTenant:
-			httpresp.JSON(c, http.StatusBadRequest, "Invalid tenant")
 		default:
 			httpresp.JSON(c, http.StatusInternalServerError, err.Error())
 		}

@@ -43,23 +43,51 @@ func buildCreateRoleBody(name string) map[string]interface{} {
 	}
 }
 
-func buildCreateTenantRoleBody(name, tenantID string) map[string]interface{} {
+// buildCreateTenantRoleBody ya NO manda tenant_id (ACC-E02 T11 — objeción D5 de
+// T10): `roles` es catálogo global y CreateRoleRequest no acepta tenant_id. Se
+// conserva el nombre para trazar el criterio de cierre de la tarea.
+func buildCreateTenantRoleBody(name string) map[string]interface{} {
 	return map[string]interface{}{
 		"name":        name,
 		"description": "Rol de prueba de integración para tenant",
 		"type":        "CUSTOM",
-		"tenant_id":   tenantID,
 		"permissions": []string{"tenant:read", "user:read"},
 	}
 }
 
+func s2sDelete(t *testing.T, url, key string) *http.Response {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodDelete, url, nil)
+	require.NoError(t, err)
+	if key != "" {
+		req.Header.Set("X-API-Key", key)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	return resp
+}
+
+func getRequest(t *testing.T, url string) *http.Response {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	require.NoError(t, err)
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	return resp
+}
+
 // --- Tests de Roles ---
+//
+// ACC-E02 T11: los endpoints de roles se ejercitan con los grupos reales
+// (lectura → tenantScopedGroup, escritura → adminGroup), así que los requests
+// llevan API keys S2S: `tenant:admin` para lectura, `system:admin` para
+// escritura.
 
 func TestRoles_POST_HappyPath_Returns201(t *testing.T) {
 	srv := newTestServer(t)
 	url := baseURL(srv) + "/roles"
 
-	resp := postJSON(t, url, buildCreateRoleBody("Rol Integración Alpha"))
+	resp := s2sPostJSON(t, url, keySystemAdminSvc, buildCreateRoleBody("Rol Integración Alpha"))
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
@@ -76,12 +104,34 @@ func TestRoles_POST_HappyPath_Returns201(t *testing.T) {
 	assert.NoError(t, err, "id debe ser UUID válido")
 }
 
+func TestRoles_POST_TenantAdminKey_Returns403(t *testing.T) {
+	// Gate de escritura de T10: `tenant:admin` NO puede crear roles. Verificado
+	// por HTTP contra el router con los grupos reales.
+	srv := newTestServer(t)
+	url := baseURL(srv) + "/roles"
+
+	resp := s2sPostJSON(t, url, keyTenantAdminSvc, buildCreateTenantRoleBody("Rol Inyectado Por Tenant Admin"))
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusForbidden, resp.StatusCode)
+}
+
+func TestRoles_POST_WithoutKey_Returns401(t *testing.T) {
+	srv := newTestServer(t)
+	url := baseURL(srv) + "/roles"
+
+	resp := postJSON(t, url, buildCreateRoleBody("Rol Sin Key"))
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+}
+
 func TestRoles_POST_DuplicateName_Returns409(t *testing.T) {
 	srv := newTestServer(t)
 	url := baseURL(srv) + "/roles"
 
-	postJSON(t, url, buildCreateRoleBody("Rol Duplicado"))
-	resp := postJSON(t, url, buildCreateRoleBody("Rol Duplicado"))
+	s2sPostJSON(t, url, keySystemAdminSvc, buildCreateRoleBody("Rol Duplicado"))
+	resp := s2sPostJSON(t, url, keySystemAdminSvc, buildCreateRoleBody("Rol Duplicado"))
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusConflict, resp.StatusCode)
@@ -96,7 +146,7 @@ func TestRoles_POST_InvalidType_Returns400(t *testing.T) {
 		"description": "Descripcion del rol de tipo invalido",
 		"type":        "INVALID_TYPE",
 	}
-	resp := postJSON(t, url, body)
+	resp := s2sPostJSON(t, url, keySystemAdminSvc, body)
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
@@ -106,7 +156,7 @@ func TestRoles_POST_MissingRequiredFields_Returns400(t *testing.T) {
 	srv := newTestServer(t)
 	url := baseURL(srv) + "/roles"
 
-	resp := postJSON(t, url, map[string]interface{}{"name": "Solo nombre"})
+	resp := s2sPostJSON(t, url, keySystemAdminSvc, map[string]interface{}{"name": "Solo nombre"})
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
@@ -116,12 +166,13 @@ func TestRoles_GET_ByID_HappyPath_Returns200(t *testing.T) {
 	srv := newTestServer(t)
 	base := baseURL(srv)
 
-	createResp := postJSON(t, base+"/roles", buildCreateRoleBody("Rol Get Test"))
+	createResp := s2sPostJSON(t, base+"/roles", keySystemAdminSvc, buildCreateRoleBody("Rol Get Test"))
 	var created roleResponse
 	decodeJSON(t, createResp, &created)
 	require.NotEmpty(t, created.ID)
 
-	resp := getRequest(t, fmt.Sprintf("%s/roles/%s", base, created.ID))
+	// La lectura de /roles es accesible con scope tenant:admin (tenantScopedGroup).
+	resp := s2sGet(t, fmt.Sprintf("%s/roles/%s", base, created.ID), keyTenantAdminSvc)
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -132,20 +183,11 @@ func TestRoles_GET_ByID_HappyPath_Returns200(t *testing.T) {
 	assert.Equal(t, "Rol Get Test", fetched.Name)
 }
 
-func getRequest(t *testing.T, url string) *http.Response {
-	t.Helper()
-	req, err := http.NewRequest(http.MethodGet, url, nil)
-	require.NoError(t, err)
-	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err)
-	return resp
-}
-
 func TestRoles_GET_ByID_NotFound_Returns404(t *testing.T) {
 	srv := newTestServer(t)
 	url := fmt.Sprintf("%s/roles/%s", baseURL(srv), uuid.New().String())
 
-	resp := getRequest(t, url)
+	resp := s2sGet(t, url, keyTenantAdminSvc)
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
@@ -155,7 +197,7 @@ func TestRoles_GET_ByID_InvalidUUID_Returns400(t *testing.T) {
 	srv := newTestServer(t)
 	url := baseURL(srv) + "/roles/not-a-uuid"
 
-	resp := getRequest(t, url)
+	resp := s2sGet(t, url, keyTenantAdminSvc)
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
@@ -165,10 +207,10 @@ func TestRoles_GET_List_ReturnsPaginationShape(t *testing.T) {
 	srv := newTestServer(t)
 	base := baseURL(srv)
 
-	postJSON(t, base+"/roles", buildCreateRoleBody("Rol Lista 1"))
-	postJSON(t, base+"/roles", buildCreateRoleBody("Rol Lista 2"))
+	s2sPostJSON(t, base+"/roles", keySystemAdminSvc, buildCreateRoleBody("Rol Lista 1"))
+	s2sPostJSON(t, base+"/roles", keySystemAdminSvc, buildCreateRoleBody("Rol Lista 2"))
 
-	resp := getRequest(t, base+"/roles?page=1&page_size=10")
+	resp := s2sGet(t, base+"/roles?page=1&page_size=10", keyTenantAdminSvc)
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -188,7 +230,7 @@ func TestRoles_PUT_Update_HappyPath_Returns200(t *testing.T) {
 	srv := newTestServer(t)
 	base := baseURL(srv)
 
-	createResp := postJSON(t, base+"/roles", buildCreateRoleBody("Rol Original"))
+	createResp := s2sPostJSON(t, base+"/roles", keySystemAdminSvc, buildCreateRoleBody("Rol Original"))
 	var created roleResponse
 	decodeJSON(t, createResp, &created)
 	require.NotEmpty(t, created.ID)
@@ -198,7 +240,7 @@ func TestRoles_PUT_Update_HappyPath_Returns200(t *testing.T) {
 		"name":        "Rol Original",
 		"description": newDesc,
 	}
-	resp := putJSON(t, fmt.Sprintf("%s/roles/%s", base, created.ID), updateBody)
+	resp := s2sPutJSON(t, fmt.Sprintf("%s/roles/%s", base, created.ID), keySystemAdminSvc, updateBody)
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -213,7 +255,7 @@ func TestRoles_PUT_NotFound_Returns404(t *testing.T) {
 	srv := newTestServer(t)
 	url := fmt.Sprintf("%s/roles/%s", baseURL(srv), uuid.New().String())
 
-	resp := putJSON(t, url, map[string]interface{}{"description": "No existe"})
+	resp := s2sPutJSON(t, url, keySystemAdminSvc, map[string]interface{}{"description": "No existe"})
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
@@ -223,12 +265,12 @@ func TestRoles_DELETE_HappyPath_Returns204(t *testing.T) {
 	srv := newTestServer(t)
 	base := baseURL(srv)
 
-	createResp := postJSON(t, base+"/roles", buildCreateRoleBody("Rol A Eliminar"))
+	createResp := s2sPostJSON(t, base+"/roles", keySystemAdminSvc, buildCreateRoleBody("Rol A Eliminar"))
 	var created roleResponse
 	decodeJSON(t, createResp, &created)
 	require.NotEmpty(t, created.ID)
 
-	resp := deleteRequest(t, fmt.Sprintf("%s/roles/%s", base, created.ID))
+	resp := s2sDelete(t, fmt.Sprintf("%s/roles/%s", base, created.ID), keySystemAdminSvc)
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
@@ -238,7 +280,7 @@ func TestRoles_DELETE_NotFound_Returns404(t *testing.T) {
 	srv := newTestServer(t)
 	url := fmt.Sprintf("%s/roles/%s", baseURL(srv), uuid.New().String())
 
-	resp := deleteRequest(t, url)
+	resp := s2sDelete(t, url, keySystemAdminSvc)
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
@@ -249,7 +291,7 @@ func TestRoles_DELETE_SystemRole_Returns403(t *testing.T) {
 	base := baseURL(srv)
 
 	// El seed crea roles de sistema — obtener su ID via listing
-	listResp := getRequest(t, base+"/roles?page=1&page_size=50")
+	listResp := s2sGet(t, base+"/roles?page=1&page_size=50", keyTenantAdminSvc)
 	defer listResp.Body.Close()
 
 	var list listRolesResponse
@@ -264,7 +306,7 @@ func TestRoles_DELETE_SystemRole_Returns403(t *testing.T) {
 	}
 	require.NotEmpty(t, systemRoleID, "debe existir al menos un rol de sistema del seed")
 
-	resp := deleteRequest(t, fmt.Sprintf("%s/roles/%s", base, systemRoleID))
+	resp := s2sDelete(t, fmt.Sprintf("%s/roles/%s", base, systemRoleID), keySystemAdminSvc)
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusForbidden, resp.StatusCode)
