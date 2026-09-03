@@ -155,9 +155,12 @@ func newTestRLSServer(t *testing.T) *testRLSServer {
 	seedTenantAndUser(t, superDB, tenantA, userA, "admin-a@example.com", "tenant-a", tenantAdminRoleID)
 	seedTenantAndUser(t, superDB, tenantB, userB, "admin-b@example.com", "tenant-b", tenantAdminRoleID)
 
-	// Tokens firmados directamente para A y B. Evitamos depender del path de login
-	// pre-auth (iam_login), que hoy lee columnas no autorizadas de users — bug heredado
-	// de T2/T5, fuera del scope de T8.
+	// Tokens firmados directamente para A y B: los tests de aislamiento no deben
+	// depender del path de login para sembrar su estado. El path de login en sí —
+	// iam_login leyendo SÓLO las 8 columnas de credencial del grant de la 017 —
+	// lo cubre TestRLS_SmokeDeCierre (ACC-E02 T9). El bug que este comentario
+	// documentaba (GetByEmail leyendo created_at/updated_at sin grant) quedó
+	// cerrado ahí: la query ahora selecciona sólo las columnas autorizadas.
 	tokenA := makeAccessToken(t, userA, tenantA, tenantAdminRoleID, "admin-a@example.com")
 	tokenB := makeAccessToken(t, userB, tenantB, tenantAdminRoleID, "admin-b@example.com")
 
@@ -257,7 +260,8 @@ func queryTenantAdminRoleID(t *testing.T, db *sql.DB) uuid.UUID {
 
 func seedTenantAndUser(t *testing.T, db *sql.DB, tenantID, userID uuid.UUID, email, slug string, roleID uuid.UUID) {
 	t.Helper()
-	// Hash de "123456", mismo que el seed de migración 006. No se usa para login acá.
+	// Hash de "123456", mismo que el seed de migración 006. El smoke de cierre
+	// (T9) loguea por HTTP con esta credencial.
 	const passwordHash = "$2a$10$yMecfP7H7mT0m9VHNnMFIezB06ihuIqUVpD12sa34UHhSfCRIQdje"
 
 	_, err := db.Exec(`

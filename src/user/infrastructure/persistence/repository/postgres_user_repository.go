@@ -107,30 +107,32 @@ func (r *PostgresUserRepository) GetByID(ctx context.Context, id uuid.UUID) (*en
 	})
 }
 
-// GetByEmail obtiene un usuario por email y tenant
+// GetByEmail obtiene un usuario por email y tenant.
+//
+// ACC-E02 T9: este método corre PRE-AUTH sobre el pool de login (iam_login —
+// ver UserFinderUseCase.FindUserByEmail, único consumidor), así que selecciona
+// SÓLO las 8 columnas de credencial que la migración 017 le otorga a ese rol.
+// created_at/updated_at quedan fuera por diseño (T1: "el path de credencial
+// no las lee"): incluirlas en el SELECT rompía el login con permission denied
+// tragado como 401. Los métodos post-auth (account_app) siguen escaneando la
+// fila completa; el patrón de query acotada es el mismo que
+// PostgresAuthRepository.GetUserByFederatedID y PostgresTenantResolver.
 func (r *PostgresUserRepository) GetByEmail(ctx context.Context, email string, tenantID *uuid.UUID) (*entity.User, error) {
 	return withRLS(ctx, r.db, func(ctx context.Context, q querier) (*entity.User, error) {
+		const credentialColumns = `id, email, password_hash, tenant_id, role_id, status, provider, federated_id`
 		var query string
 		var args []interface{}
 
 		if tenantID != nil {
-			query = `
-				SELECT id, email, password_hash, tenant_id, role_id, status, provider, federated_id, created_at, updated_at
-				FROM users
-				WHERE email = $1 AND tenant_id = $2
-			`
+			query = `SELECT ` + credentialColumns + ` FROM users WHERE email = $1 AND tenant_id = $2`
 			args = []interface{}{email, *tenantID}
 		} else {
-			query = `
-				SELECT id, email, password_hash, tenant_id, role_id, status, provider, federated_id, created_at, updated_at
-				FROM users
-				WHERE email = $1
-			`
+			query = `SELECT ` + credentialColumns + ` FROM users WHERE email = $1`
 			args = []interface{}{email}
 		}
 
 		row := q.QueryRowContext(ctx, query, args...)
-		return r.scanUser(row)
+		return r.scanCredentialUser(row)
 	})
 }
 
@@ -318,6 +320,64 @@ func (r *PostgresUserRepository) CountByStatus(ctx context.Context, status value
 	})
 }
 
+// scanCredentialUser mapea una fila de las 8 columnas de credencial (sin
+// timestamps) a una entidad User. Lo usa GetByEmail, que corre pre-auth bajo
+// iam_login: el grant de la 017 no incluye created_at/updated_at (ACC-E02 T9).
+func (r *PostgresUserRepository) scanCredentialUser(row *sql.Row) (*entity.User, error) {
+	var emailStr, statusStr string
+	var federatedID sql.NullString
+	user := &entity.User{}
+
+	err := row.Scan(
+		&user.ID,
+		&emailStr,
+		&user.PasswordHash,
+		&user.TenantID,
+		&user.RoleID,
+		&statusStr,
+		&user.Provider,
+		&federatedID,
+	)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, exception.ErrUserNotFound
+		}
+		return nil, fmt.Errorf("error scanning user: %w", err)
+	}
+
+	if err := hydrateUserValues(user, emailStr, statusStr, federatedID); err != nil {
+		return nil, err
+	}
+	return user, nil
+}
+
+// hydrateUserValues completa la entidad con los value objects y el FederatedID
+// nullable — shared por scanUser (fila completa) y scanCredentialUser.
+func hydrateUserValues(user *entity.User, emailStr, statusStr string, federatedID sql.NullString) error {
+	// Asignar FederatedID manejando NULL
+	if federatedID.Valid {
+		user.FederatedID = federatedID.String
+	} else {
+		user.FederatedID = ""
+	}
+
+	// Construir value objects
+	email, err := value_object.NewEmail(emailStr)
+	if err != nil {
+		return fmt.Errorf("invalid email in database: %w", err)
+	}
+	user.Email = email
+
+	status, err := value_object.NewUserStatusFromString(statusStr)
+	if err != nil {
+		return fmt.Errorf("invalid status in database: %w", err)
+	}
+	user.Status = status
+
+	return nil
+}
+
 // scanUser mapea una fila de la base de datos a una entidad User
 func (r *PostgresUserRepository) scanUser(row *sql.Row) (*entity.User, error) {
 	var emailStr, statusStr string
@@ -344,26 +404,9 @@ func (r *PostgresUserRepository) scanUser(row *sql.Row) (*entity.User, error) {
 		return nil, fmt.Errorf("error scanning user: %w", err)
 	}
 
-	// Asignar FederatedID manejando NULL
-	if federatedID.Valid {
-		user.FederatedID = federatedID.String
-	} else {
-		user.FederatedID = ""
+	if err := hydrateUserValues(user, emailStr, statusStr, federatedID); err != nil {
+		return nil, err
 	}
-
-	// Construir value objects
-	email, err := value_object.NewEmail(emailStr)
-	if err != nil {
-		return nil, fmt.Errorf("invalid email in database: %w", err)
-	}
-	user.Email = email
-
-	status, err := value_object.NewUserStatusFromString(statusStr)
-	if err != nil {
-		return nil, fmt.Errorf("invalid status in database: %w", err)
-	}
-	user.Status = status
-
 	return user, nil
 }
 
