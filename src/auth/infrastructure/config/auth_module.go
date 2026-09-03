@@ -78,13 +78,60 @@ func ValidateJWTSecret(secret string) error {
 }
 
 
+// SetupTokenRevocationGate registra el middleware de revocación de tokens sobre
+// el grupo padre ANTES de que main cree los grupos de rutas de gestión.
+//
+// ACC-E02 T8g (criterio (a)): Gin congela la cadena de handlers de un grupo en
+// el momento de crearlo — adminGroup/tenantScopedGroup se creaban ANTES del
+// `router.Use(TokenRevocationCheck(...))` de SetupAuthModule, así que un JTI
+// revocado seguía autorizando /users, /tenants/:id, /roles y /plans hasta que
+// el access token expirara por tiempo (≤15 min). El logout y el revoke-all no
+// cortaban el acceso a esas rutas. La corrección es de orden de registro, no de
+// lógica: el gate va acá, ANTES de crear los grupos; SetupAuthModule lo recibe
+// ya registrado y NO lo vuelve a registrar (un segundo Use duplicaría la
+// consulta de revocación en cada request).
+//
+// Devuelve el repositorio de auth sobre account_app para que SetupAuthModule
+// reutilice esa MISMA instancia en sus casos de uso.
+func SetupTokenRevocationGate(
+	router *gin.RouterGroup,
+	appDB *sql.DB,
+	loginDB *sql.DB,
+	jwtSecret string,
+) port.AuthRepository {
+	authRepoApp := repository.NewPostgresAuthRepository(appDB)
+
+	// ACC-E02 T8g (criterio (B) del gate de T8f): el resolver corre sobre el
+	// pool de login — la policy users_login_lookup (019) le permite el SELECT
+	// sin filtro de tenant y el grant de 017 cubre tenant_id. Deriva el tenant
+	// de tokens legacy sin claim de tenant a partir del user_id verificado.
+	tenantResolver := adapter.NewPostgresTenantResolver(loginDB)
+
+	router.Use(authmw.TokenRevocationCheck(authmw.TokenRevocationConfig{
+		JWTSecret:      jwtSecret,
+		AuthRepo:       authRepoApp,
+		TenantResolver: tenantResolver,
+		ExcludedRoutes: []string{
+			"/api/v1/auth/login",
+			"/api/v1/auth/refresh",
+		},
+	}))
+
+	return authRepoApp
+}
+
 // SetupAuthModule configura e inicializa el módulo de autenticación.
 // ACC-E02 T5: dos pools de DB — appDB (account_app, RLS) para toda operación
 // post-auth y loginDB (iam_login) para la fase pre-auth de credenciales.
+// ACC-E02 T8g: el gate de revocación YA se registró sobre el grupo padre vía
+// SetupTokenRevocationGate (antes de crear los grupos de gestión); acá llega la
+// instancia de authRepoApp que ese gate usa, para que casos de uso y gate
+// compartan el mismo repositorio.
 func SetupAuthModule(
 	router *gin.RouterGroup,
 	appDB *sql.DB,
 	loginDB *sql.DB,
+	authRepoApp port.AuthRepository,
 	userService port.UserService,
 	loginUserService port.UserService,
 	tenantService port.TenantService,
@@ -97,9 +144,8 @@ func SetupAuthModule(
 		Namespace:          config.Namespace,
 	}
 
-	// Repositorios: uno por pool. El de login se usa sólo en la fase pre-auth
-	// de POST /auth/login; el de app en refresh/logout/revoke-all y post-auth.
-	authRepoApp := repository.NewPostgresAuthRepository(appDB)
+	// Repositorio de login: sólo la fase pre-auth de POST /auth/login. El de
+	// app lo aporta SetupTokenRevocationGate (misma instancia que el gate).
 	authRepoLogin := repository.NewPostgresAuthRepository(loginDB)
 
 	// Instanciar logger de seguridad compartido
@@ -125,7 +171,6 @@ func SetupAuthModule(
 		securityLogger,
 	)
 	refreshTokenUseCase := usecase.NewRefreshTokenUseCase(authConfig, authRepoApp, userService, tenantService, jwtService, roleResolver, planResolver)
-	validateTokenUseCase := usecase.NewValidateTokenUseCase(jwtService)
 	logoutUseCase := usecase.NewLogoutUseCase(authRepoApp, securityLogger)
 	revokeAllUseCase := usecase.NewRevokeAllUseCase(authRepoApp, config.AccessTokenExpiry, securityLogger)
 
@@ -133,21 +178,14 @@ func SetupAuthModule(
 	authHandler := controller.NewAuthHandler(
 		loginUseCase,
 		refreshTokenUseCase,
-		validateTokenUseCase,
 		logoutUseCase,
 		revokeAllUseCase,
 	)
 
-	// Registrar middleware de revocación de tokens
-	router.Use(authmw.TokenRevocationCheck(authmw.TokenRevocationConfig{
-		JWTSecret: config.JWTSecret,
-		AuthRepo:  authRepoApp,
-		ExcludedRoutes: []string{
-			"/api/v1/auth/login",
-			"/api/v1/auth/refresh",
-			"/api/v1/auth/validate",
-		},
-	}))
+	// El middleware de revocación NO se registra acá: SetupTokenRevocationGate
+	// lo registró sobre el grupo padre ANTES de que main creara los grupos de
+	// gestión (ACC-E02 T8g, criterio (a) — Gin congela la cadena al crear el
+	// grupo). authRepoApp ya llegó compartido desde ahí.
 
 	// Registrar rutas
 	authHandler.RegisterRoutes(router)

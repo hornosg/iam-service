@@ -27,6 +27,13 @@ type TokenClaims struct {
 	Plan      *PlanClaim      `json:"plan,omitempty"`
 	Features  *TenantFeatures `json:"features"`
 	ExpiresAt int64           `json:"exp"`
+	// IssuedAt es el `iat` estándar, en segundos Unix (ACC-E02 T8i). El gate de
+	// revocación lo coteja contra las marcas de alcance user de revoke-all:
+	// queda revocado todo token emitido ANTES del corte (revoked_at > iat).
+	// Aditivo: tokens viejos sin este claim deserializan a 0, y el gate los
+	// trata fail-closed (cualquier marca user viva del usuario los revoca —
+	// no se puede saber cuándo fueron emitidos).
+	IssuedAt int64 `json:"iat,omitempty"`
 }
 
 // PlanTierFree es el tier más restrictivo, usado como default fail-safe cuando el tenant
@@ -40,6 +47,7 @@ type PlanClaim struct {
 }
 
 func NewTokenClaims(userID, tenantID, roleID uuid.UUID, email, namespace string, features *TenantFeatures, expiresAt time.Time) *TokenClaims {
+	issuedAt := time.Now().Unix()
 	return &TokenClaims{
 		JTI:       uuid.New(),
 		Issuer:    "iam-service",
@@ -50,6 +58,7 @@ func NewTokenClaims(userID, tenantID, roleID uuid.UUID, email, namespace string,
 		RoleID:    roleID,
 		Features:  features,
 		ExpiresAt: expiresAt.Unix(),
+		IssuedAt:  issuedAt,
 	}
 }
 

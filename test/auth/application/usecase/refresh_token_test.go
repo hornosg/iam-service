@@ -2,6 +2,7 @@ package usecase_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -147,9 +148,11 @@ func TestRefreshTokenUseCase_Execute(t *testing.T) {
 		}
 		mockUserService.SetupUser(user)
 
-		// Crear refresh token válido
+		// Crear refresh token válido. T8e: la fila trae tenant denormalizado
+		// (NOT NULL desde la migración 021) — el mock lo refleja.
 		refreshToken := tokenMother.WithUser(userID)
 		refreshToken.Token = "valid_refresh_token"
+		refreshToken.TenantID = tenantID
 		mockAuthRepo.SetupRefreshTokens([]*entity.RefreshToken{refreshToken})
 
 		// Act
@@ -228,9 +231,11 @@ func TestRefreshTokenUseCase_Execute(t *testing.T) {
 
 		userID := uuid.New()
 
-		// Crear refresh token expirado
+		// Crear refresh token expirado (con tenant: es lo que el repo devuelve
+		// desde la denormalización de T8e)
 		expiredToken := tokenMother.Expired()
 		expiredToken.UserID = userID
+		expiredToken.TenantID = uuid.New()
 		mockAuthRepo.SetupRefreshTokens([]*entity.RefreshToken{expiredToken})
 
 		// Act
@@ -271,6 +276,7 @@ func TestRefreshTokenUseCase_Execute(t *testing.T) {
 
 		// Crear refresh token válido pero usuario inexistente
 		refreshToken := tokenMother.WithUser(userID)
+		refreshToken.TenantID = uuid.New()
 		mockAuthRepo.SetupRefreshTokens([]*entity.RefreshToken{refreshToken})
 
 		// Act
@@ -358,8 +364,9 @@ func TestRefreshTokenUseCase_Execute(t *testing.T) {
 		}
 		mockUserService.SetupUser(user)
 
-		// Crear refresh token válido
+		// Crear refresh token válido (con tenant denormalizado, T8e)
 		refreshToken := tokenMother.WithUser(userID)
+		refreshToken.TenantID = tenantID
 		mockAuthRepo.SetupRefreshTokens([]*entity.RefreshToken{refreshToken})
 
 		// Act
@@ -411,8 +418,9 @@ func TestRefreshTokenUseCase_Execute(t *testing.T) {
 		}
 		mockUserService.SetupUser(user)
 
-		// Crear refresh token válido
+		// Crear refresh token válido (con tenant denormalizado, T8e)
 		refreshToken := tokenMother.WithUser(userID)
+		refreshToken.TenantID = tenantID
 		mockAuthRepo.SetupRefreshTokens([]*entity.RefreshToken{refreshToken})
 
 		// Act
@@ -423,5 +431,111 @@ func TestRefreshTokenUseCase_Execute(t *testing.T) {
 		assert.NotNil(t, response)
 		assert.NotEmpty(t, response.AccessToken)
 		assert.Equal(t, 1, mockTenantService.GetCallCount("Execute"))
+	})
+}
+
+// T8f: la rotación single-use es check-then-act — cuando el DELETE del repo
+// reporta que la fila ya no existe (otro request concurrente la consumió),
+// este request NO recibe credenciales nuevas: falla con ErrInvalidToken (401),
+// nunca con un 500 de infraestructura, y jamás llega a CreateRefreshToken.
+func TestRefreshTokenUseCase_Execute_TokenYaConsumido(t *testing.T) {
+	ctx := context.Background()
+	tokenMother := authEntity.Create()
+
+	t.Run("rotación perdida contra otro request falla con ErrInvalidToken y no emite reemplazo", func(t *testing.T) {
+		// Arrange
+		mockAuthRepo := repository.NewMockAuthRepository()
+		mockUserService := NewMockUserService()
+		mockTenantService := NewMockTenantService()
+
+		config := usecase.AuthConfig{
+			AccessTokenExpiry:  15 * time.Minute,
+			RefreshTokenExpiry: 7 * 24 * time.Hour,
+		}
+		jwtSvc := adapter.NewJWTServiceAdapter("test-secret")
+
+		refreshTokenUseCase := usecase.NewRefreshTokenUseCase(
+			config,
+			mockAuthRepo,
+			mockUserService,
+			mockTenantService,
+			jwtSvc,
+			NewMockRoleResolver(),
+			NewMockPlanResolver(),
+		)
+
+		userID := uuid.New()
+		tenantID := uuid.New()
+
+		user := &port.UserData{
+			ID:       userID,
+			Email:    "test@example.com",
+			TenantID: tenantID,
+			RoleID:   uuid.New(),
+			Status:   "ACTIVE",
+		}
+		mockUserService.SetupUser(user)
+
+		refreshToken := tokenMother.WithUser(userID)
+		refreshToken.Token = "rt-consumido-en-carrera"
+		refreshToken.TenantID = tenantID
+		mockAuthRepo.SetupRefreshTokens([]*entity.RefreshToken{refreshToken})
+
+		// El repo devuelve el sentinela de T8f envuelto — como hace el repo real
+		// cuando RowsAffected != 1.
+		mockAuthRepo.FailMethodWith("DeleteRefreshToken",
+			fmt.Errorf("%w: el DELETE tocó 0 filas", port.ErrRefreshTokenAlreadyConsumed))
+
+		// Act
+		response, err := refreshTokenUseCase.Execute(ctx, refreshToken.Token)
+
+		// Assert
+		assert.ErrorIs(t, err, usecase.ErrInvalidToken)
+		assert.Nil(t, response)
+		assert.Equal(t, 0, mockAuthRepo.GetCallCount("CreateRefreshToken"),
+			"sin fila consumida no puede emitirse un reemplazo: sería una segunda credencial viva nacida de la misma")
+	})
+
+	t.Run("un token expirado consumido en carrera responde expirado, no 500", func(t *testing.T) {
+		// Arrange
+		mockAuthRepo := repository.NewMockAuthRepository()
+		mockUserService := NewMockUserService()
+		mockTenantService := NewMockTenantService()
+
+		config := usecase.AuthConfig{
+			AccessTokenExpiry:  15 * time.Minute,
+			RefreshTokenExpiry: 7 * 24 * time.Hour,
+		}
+		jwtSvc := adapter.NewJWTServiceAdapter("test-secret")
+
+		refreshTokenUseCase := usecase.NewRefreshTokenUseCase(
+			config,
+			mockAuthRepo,
+			mockUserService,
+			mockTenantService,
+			jwtSvc,
+			NewMockRoleResolver(),
+			NewMockPlanResolver(),
+		)
+
+		userID := uuid.New()
+		tenantID := uuid.New()
+
+		refreshToken := tokenMother.WithUser(userID)
+		refreshToken.Token = "rt-expirado-consumido"
+		refreshToken.TenantID = tenantID
+		refreshToken.ExpiresAt = time.Now().Add(-time.Hour)
+		mockAuthRepo.SetupRefreshTokens([]*entity.RefreshToken{refreshToken})
+
+		mockAuthRepo.FailMethodWith("DeleteRefreshToken",
+			fmt.Errorf("%w: el DELETE tocó 0 filas", port.ErrRefreshTokenAlreadyConsumed))
+
+		// Act
+		response, err := refreshTokenUseCase.Execute(ctx, refreshToken.Token)
+
+		// Assert
+		assert.ErrorIs(t, err, usecase.ErrExpiredToken,
+			"la carrera por un token expirado es igual de muerta: 401 expirado, no 500")
+		assert.Nil(t, response)
 	})
 }

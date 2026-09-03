@@ -8,8 +8,8 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 
-	sharedctx "iam/src/shared/context"
 	"iam/src/auth/infrastructure/s2s"
+	sharedctx "iam/src/shared/context"
 )
 
 // ScopeMiddlewareFactory crea middlewares que requieren scopes S2S específicos.
@@ -75,6 +75,14 @@ func Authorize(jwtSecret, namespace string, registry *s2s.Registry, requiredScop
 				if cred.HasAnyScope(requiredScopes) {
 					c.Set("s2s", true)
 					c.Set("s2s_service", cred.Service)
+					// ACC-E02 T8d: el flag de system_admin se deriva del scope
+					// `system:admin` que el registry ACABA de verificar (lookup
+					// constant-time de la key) — no de ningún claim. Un caller
+					// que pasó el gate con otro scope (ej. tenant:provision en
+					// provisionGroup) NO lo recibe, aunque el gate lo deje pasar.
+					if hasScope(cred.Scopes, s2s.ScopeSystemAdmin) {
+						markSystemAdmin(c)
+					}
 					c.Next()
 					return
 				}
@@ -129,15 +137,31 @@ func Authorize(jwtSecret, namespace string, registry *s2s.Registry, requiredScop
 			return
 		}
 
+		// ACC-E02 T8d: para humanos, el flag de system_admin se deriva de la
+		// decisión de autorización recién tomada — el rol `system_admin` del
+		// claim `roles` verificado (firma + intersección con allowedRoles) Y
+		// la ruta efectivamente autorizando system_admin. Un claim como
+		// `is_system_admin` que la ruta no coteja jamás se consulta: inyectarlo
+		// en un token tenant_admin no abre el branch cross-tenant (test de T8d).
+		if routeAllowsSystemAdmin(allowedRoles) && hasRole(roles, systemAdminRole) {
+			markSystemAdmin(c)
+		}
+
 		// Contexto para handlers/middleware downstream (mismas claves que TenantValidation).
 		c.Set("jwt_claims", claims)
 		c.Set("roles", roles)
 		if tid, ok := claims["tenant_id"].(string); ok && tid != "" {
-			c.Set("tenant_id", tid)
-			// ACC-E02 T8b: propagar el tenant_id al context.Context de la request para
-			// que los repositorios RLS-sensitivos puedan fijar app.tenant_id via
-			// sharedpostgres.WithRLSInTransaction (patrón PLAT-E29 / tenant-service).
-			if parsed, perr := uuid.Parse(tid); perr == nil {
+			// ACC-E02 T8g: un token legacy sin tenant real serializa el claim en
+			// cero ("00000000-..."): string no vacío, parseable a uuid.Nil. NO se
+			// propaga — pisaría el tenant que el gate de revocación ya derivó del
+			// user_id verificado (criterio (B) del gate de T8f) y devolvería la
+			// request a un 500 fail-closed. El token de la prueba HTTP de T8g
+			// reproduce exactamente ese modo de fallo.
+			if parsed, perr := uuid.Parse(tid); perr == nil && parsed != uuid.Nil {
+				c.Set("tenant_id", tid)
+				// ACC-E02 T8b: propagar el tenant_id al context.Context de la request para
+				// que los repositorios RLS-sensitivos puedan fijar app.tenant_id via
+				// sharedpostgres.WithRLSInTransaction (patrón PLAT-E29 / tenant-service).
 				c.Request = c.Request.WithContext(sharedctx.WithTenantID(c.Request.Context(), parsed))
 			}
 		}
@@ -148,6 +172,49 @@ func Authorize(jwtSecret, namespace string, registry *s2s.Registry, requiredScop
 		}
 		c.Next()
 	}
+}
+
+// systemAdminRole es el rol humano que Autorize verifica contra allowedRoles y
+// del que deriva la autoridad system_admin (contraparte humana del scope S2S
+// `system:admin`).
+const systemAdminRole = "system_admin"
+
+// markSystemAdmin propaga la autoridad system_admin YA VERIFICADA por este gate
+// al context.Context de la request, para que los repositorios RLS-sensitivos
+// fijen el GUC `app.is_system_admin` (sharedpostgres.SystemAdminVar) dentro de
+// su transacción. Sólo este middleware la fija; consumirla sin haberla recibido
+// es fail-closed (sharedctx.IsSystemAdminFromContext → false).
+func markSystemAdmin(c *gin.Context) {
+	c.Set("is_system_admin", true)
+	c.Request = c.Request.WithContext(sharedctx.WithSystemAdmin(c.Request.Context()))
+}
+
+// hasScope reporta si el credential S2S verificado tiene el scope dado.
+func hasScope(scopes []s2s.Scope, want s2s.Scope) bool {
+	for _, s := range scopes {
+		if s == want {
+			return true
+		}
+	}
+	return false
+}
+
+// hasRole reporta si el claim `roles` ya verificado contiene el rol dado.
+func hasRole(roles []string, want string) bool {
+	for _, r := range roles {
+		if r == want {
+			return true
+		}
+	}
+	return false
+}
+
+// routeAllowsSystemAdmin reporta si la ruta que está gateando este middleware
+// efectivamente autoriza el rol system_admin. El flag sólo se deriva cuando la
+// ruta coteja esa autoridad: una ruta tenant-only con un token que además
+// arrastre el rol system_admin no abre el branch cross-tenant.
+func routeAllowsSystemAdmin(allowedRoles []string) bool {
+	return hasRole(allowedRoles, systemAdminRole)
 }
 
 // rolesClaim extrae el claim `roles` tolerando que venga como []interface{} (lo

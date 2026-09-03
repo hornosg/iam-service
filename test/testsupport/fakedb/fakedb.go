@@ -11,6 +11,7 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
+	"io"
 	"sync"
 	"testing"
 )
@@ -23,6 +24,10 @@ type Conn struct {
 	RolledBack bool
 	// ExecErr, si no es nil, hace fallar toda ejecución.
 	ExecErr error
+	// ZeroRows, si es true, hace que toda ejecución devuelva 0 filas
+	// afectadas (T8f: para simular un DELETE que no tocó nada). El default
+	// es 1 fila, que es lo que la mayoría de los tests quieren afirmar.
+	ZeroRows bool
 }
 
 // Statements devuelve una copia de las sentencias ejecutadas, en orden.
@@ -44,6 +49,9 @@ func (c *Conn) ExecContext(_ context.Context, query string, _ []driver.NamedValu
 	c.record(query)
 	if c.ExecErr != nil {
 		return nil, c.ExecErr
+	}
+	if c.ZeroRows {
+		return driver.RowsAffected(0), nil
 	}
 	return driver.RowsAffected(1), nil
 }
@@ -82,4 +90,26 @@ func New(t *testing.T) (*sql.DB, *Conn) {
 	db.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = db.Close() })
 	return db, conn
+}
+
+// Rows es un driver.Rows vacío: basta para que database/sql entregue
+// sql.ErrNoRows en el Scan, que es lo que los tests necesitan para afirmar
+// sobre la sentencia emitida sin tener datos.
+type Rows struct{}
+
+func (Rows) Columns() []string { return nil }
+func (Rows) Close() error      { return nil }
+func (Rows) Next([]driver.Value) error {
+	return io.EOF
+}
+
+// QueryContext permite afirmar sobre las sentencias SELECT que emiten los
+// métodos de lectura (GetRefreshToken, IsTokenRevoked...). Devuelve siempre un
+// result set vacío.
+func (c *Conn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
+	c.record(query)
+	if c.ExecErr != nil {
+		return nil, c.ExecErr
+	}
+	return Rows{}, nil
 }

@@ -426,24 +426,6 @@ components:
         refresh_token:
           type: string
 
-    ValidateTokenResponse:
-      type: object
-      properties:
-        valid:
-          type: boolean
-        user_id:
-          type: string
-          format: uuid
-        email:
-          type: string
-          format: email
-        tenant_id:
-          type: string
-          format: uuid
-        role_id:
-          type: string
-          format: uuid
-
     RevokeAllResponse:
       type: object
       properties:
@@ -880,33 +862,6 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '401':
           description: Refresh token inválido o expirado
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '500':
-          description: Error interno del servidor
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  /auth/validate:
-    get:
-      summary: Validar token de acceso
-      description: Valida un token JWT y retorna sus claims
-      tags: [Auth]
-      security:
-        - BearerAuth: []
-      responses:
-        '200':
-          description: Token válido
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ValidateTokenResponse'
-        '401':
-          description: Token inválido o no proporcionado
           content:
             application/json:
               schema:

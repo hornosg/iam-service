@@ -486,7 +486,6 @@ erDiagram
 Auth Module:
 POST   /api/v1/auth/login      - Autenticación
 POST   /api/v1/auth/refresh    - Renovar token
-GET    /api/v1/auth/validate   - Validar token
 POST   /api/v1/auth/logout     - Cerrar sesión
 
 User Module:

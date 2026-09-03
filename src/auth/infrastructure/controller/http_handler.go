@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"log"
 	"net/http"
 	"strings"
 
@@ -14,26 +15,23 @@ import (
 )
 
 type AuthHandler struct {
-	loginUseCase         *usecase.LoginUseCase
-	refreshTokenUseCase  *usecase.RefreshTokenUseCase
-	validateTokenUseCase *usecase.ValidateTokenUseCase
-	logoutUseCase        *usecase.LogoutUseCase
-	revokeAllUseCase     *usecase.RevokeAllUseCase
+	loginUseCase        *usecase.LoginUseCase
+	refreshTokenUseCase *usecase.RefreshTokenUseCase
+	logoutUseCase       *usecase.LogoutUseCase
+	revokeAllUseCase    *usecase.RevokeAllUseCase
 }
 
 func NewAuthHandler(
 	loginUseCase *usecase.LoginUseCase,
 	refreshTokenUseCase *usecase.RefreshTokenUseCase,
-	validateTokenUseCase *usecase.ValidateTokenUseCase,
 	logoutUseCase *usecase.LogoutUseCase,
 	revokeAllUseCase *usecase.RevokeAllUseCase,
 ) *AuthHandler {
 	return &AuthHandler{
-		loginUseCase:         loginUseCase,
-		refreshTokenUseCase:  refreshTokenUseCase,
-		validateTokenUseCase: validateTokenUseCase,
-		logoutUseCase:        logoutUseCase,
-		revokeAllUseCase:     revokeAllUseCase,
+		loginUseCase:        loginUseCase,
+		refreshTokenUseCase: refreshTokenUseCase,
+		logoutUseCase:       logoutUseCase,
+		revokeAllUseCase:    revokeAllUseCase,
 	}
 }
 
@@ -52,7 +50,10 @@ func NewAuthHandler(
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req request.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		httpresp.JSONWithDetails(c, http.StatusBadRequest, "Datos de entrada inválidos", err.Error())
+		// ACC-E02 T8j, criterio (b): el detalle (nombres de campo, formato JSON)
+		// va al log, no al cuerpo de la respuesta.
+		log.Printf("[auth] login: body inválido: %v", err)
+		httpresp.JSON(c, http.StatusBadRequest, "Datos de entrada inválidos")
 		return
 	}
 
@@ -66,7 +67,10 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		case usecase.ErrUserNotFound:
 			httpresp.JSON(c, http.StatusUnauthorized, "Usuario no encontrado")
 		default:
-			httpresp.JSONWithDetails(c, http.StatusInternalServerError, "Error interno del servidor", err.Error())
+			// ACC-E02 T8j, criterio (b): ídem logout (T8g) — el detalle interno
+			// (mensajes de Postgres con nombres de tabla y policy) va al log.
+			log.Printf("[auth] login: error interno: %v", err)
+			httpresp.JSON(c, http.StatusInternalServerError, "Error interno del servidor")
 		}
 		return
 	}
@@ -96,7 +100,17 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		return
 	}
 
-	response, err := h.refreshTokenUseCase.Execute(c.Request.Context(), req.RefreshToken)
+	// ACC-E02 T8e: el Bearer es OPCIONAL en refresh (contrato vigente con los
+	// consumidores: el cuerpo sólo lleva refresh_token). Si viene —típicamente
+	// ya expirado— se pasa al usecase para el cross-check de tenant. Un Bearer
+	// ilegible no bloquea: la posesión del refresh token sigue siendo la
+	// credencial y el usecase resuelve el tenant de la fila.
+	presenterToken := ""
+	if authHeader := c.GetHeader("Authorization"); strings.HasPrefix(authHeader, "Bearer ") {
+		presenterToken = strings.TrimPrefix(authHeader, "Bearer ")
+	}
+
+	response, err := h.refreshTokenUseCase.ExecuteWithPresenter(c.Request.Context(), req.RefreshToken, presenterToken)
 	if err != nil {
 		switch err {
 		case usecase.ErrInvalidToken:
@@ -106,53 +120,14 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		case usecase.ErrUserNotFound:
 			httpresp.JSON(c, http.StatusUnauthorized, "Usuario no encontrado")
 		default:
-			httpresp.JSONWithDetails(c, http.StatusInternalServerError, "Error interno del servidor", err.Error())
+			// ACC-E02 T8j, criterio (b): ídem logout (T8g) — detalle al log.
+			log.Printf("[auth] refresh: error interno: %v", err)
+			httpresp.JSON(c, http.StatusInternalServerError, "Error interno del servidor")
 		}
 		return
 	}
 
 	c.JSON(http.StatusOK, response)
-}
-
-// ValidateToken godoc
-// @Summary Validate access token
-// @Description Validate JWT access token and return claims
-// @Tags auth
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Success 200 {object} map[string]interface{}
-// @Failure 401 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
-// @Router /auth/validate [get]
-func (h *AuthHandler) ValidateToken(c *gin.Context) {
-	// Extraer token del header Authorization
-	authHeader := c.GetHeader("Authorization")
-	if authHeader == "" {
-		httpresp.JSON(c, http.StatusUnauthorized, "Token de autorización requerido")
-		return
-	}
-
-	// Verificar formato Bearer
-	tokenParts := strings.Split(authHeader, " ")
-	if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
-		httpresp.JSON(c, http.StatusUnauthorized, "Formato de token inválido")
-		return
-	}
-
-	claims, err := h.validateTokenUseCase.Execute(tokenParts[1])
-	if err != nil {
-		httpresp.JSONWithDetails(c, http.StatusUnauthorized, "Token inválido", err.Error())
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"valid":     true,
-		"user_id":   claims.UserID,
-		"email":     claims.Email,
-		"tenant_id": claims.TenantID,
-		"role_id":   claims.RoleID,
-	})
 }
 
 // Logout godoc
@@ -189,7 +164,11 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 
 	err := h.logoutUseCase.Execute(c.Request.Context(), userID, claims)
 	if err != nil {
-		httpresp.JSONWithDetails(c, http.StatusInternalServerError, "Error cerrando sesión", err.Error())
+		// ACC-E02 T8g, criterio (C) del gate de T8f: el detalle del error
+		// (sentinelas de fila de T8f, mensajes de Postgres con nombres de tabla
+		// y policy) va al log correlacionable, NUNCA al cuerpo de la respuesta.
+		log.Printf("[auth] logout: error interno user=%s: %v", userID, err)
+		httpresp.JSON(c, http.StatusInternalServerError, "Error cerrando sesión")
 		return
 	}
 
@@ -212,7 +191,10 @@ func (h *AuthHandler) RevokeAll(c *gin.Context) {
 
 	err := h.revokeAllUseCase.Execute(c.Request.Context(), userID)
 	if err != nil {
-		httpresp.JSONWithDetails(c, http.StatusInternalServerError, "Error revocando tokens", err.Error())
+		// ACC-E02 T8g, criterio (C) del gate de T8f: ídem logout — el detalle
+		// interno va al log, la respuesta no expone nada del repo.
+		log.Printf("[auth] revoke-all: error interno user=%s: %v", userID, err)
+		httpresp.JSON(c, http.StatusInternalServerError, "Error revocando tokens")
 		return
 	}
 
@@ -225,7 +207,6 @@ func (h *AuthHandler) RegisterRoutes(router *gin.RouterGroup) {
 	{
 		authGroup.POST("/login", h.Login)
 		authGroup.POST("/refresh", h.RefreshToken)
-		authGroup.GET("/validate", h.ValidateToken)
 		authGroup.POST("/logout", h.Logout)
 		authGroup.POST("/revoke-all", h.RevokeAll)
 	}

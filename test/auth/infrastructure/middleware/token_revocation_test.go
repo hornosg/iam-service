@@ -2,6 +2,7 @@ package middleware_test
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -10,12 +11,14 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	sharedservice "github.com/hornosg/go-shared/domain/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"iam/src/auth/domain/value_object"
 	"iam/src/auth/infrastructure/adapter"
 	"iam/src/auth/infrastructure/middleware"
+	sharedctx "iam/src/shared/context"
 	repo "iam/test/auth/infrastructure/persistence/repository"
 )
 
@@ -47,7 +50,9 @@ func signNoneToken(t *testing.T, claims value_object.TokenClaims) string {
 }
 
 // newEngine arma un router con el middleware bajo test y un handler final que
-// devuelve 200 y, si user_id quedó en contexto, lo refleja en un header.
+// devuelve 200 y, si user_id quedó en contexto, lo refleja en un header. Si el
+// context.Context de la request porta tenant (T8g: derivado para tokens legacy
+// o tomado del claim), lo refleja en X-Tenant-Id.
 func newEngine(cfg middleware.TokenRevocationConfig) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
@@ -55,6 +60,9 @@ func newEngine(cfg middleware.TokenRevocationConfig) *gin.Engine {
 	r.GET("/*p", func(c *gin.Context) {
 		if uid, ok := c.Get("user_id"); ok {
 			c.Header("X-User-Id", uid.(uuid.UUID).String())
+		}
+		if tid, ok := sharedctx.TenantIDFromContext(c.Request.Context()); ok {
+			c.Header("X-Tenant-Id", tid.String())
 		}
 		c.Status(http.StatusOK)
 	})
@@ -190,8 +198,10 @@ func TestTokenRevocation_NilJTISkipsRevocationCheck(t *testing.T) {
 	assert.Equal(t, 0, mock.GetCallCount("IsTokenRevoked"))
 }
 
-func TestTokenRevocation_RepoErrorDelegatesNext(t *testing.T) {
-	// IsTokenRevoked devuelve error => err != nil => no se aborta => next.
+func TestTokenRevocation_RepoErrorFailsClosed(t *testing.T) {
+	// T8e: IsTokenRevoked devuelve error => el gate falla CERRADO (500): si no
+	// se puede verificar la revocación no se autoriza el request. Antes delegaba
+	// a next (fail-open) y un JTI revocado pasaba cuando la consulta fallaba.
 	claims := baseClaims(uuid.New())
 	mock := repo.NewMockAuthRepository()
 	mock.ShouldFailOn("IsTokenRevoked")
@@ -200,6 +210,113 @@ func TestTokenRevocation_RepoErrorDelegatesNext(t *testing.T) {
 	r := newEngine(cfg)
 	tok := signToken(t, claims)
 	w := doRequest(t, r, "/api/x", "Bearer "+tok)
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	// Abort impide correr el handler final => no se setea user_id.
+	assert.Empty(t, w.Header().Get("X-User-Id"))
+}
+// --- token legacy sin claim de tenant (ACC-E02 T8g, criterio (B) del gate de
+// T8f) ---
+
+// mockTenantResolver es un mock de port.TenantByUserResolver para ejercitar la
+// derivación de tenant del user_id verificado. Acepta tanto un tenant fijo
+// como un error a inyectar (sentinela o genérico).
+type mockTenantResolver struct {
+	tenant uuid.UUID
+	err    error
+	calls  int
+}
+
+func (m *mockTenantResolver) ResolveTenantByUserID(_ context.Context, _ uuid.UUID) (uuid.UUID, error) {
+	m.calls++
+	return m.tenant, m.err
+}
+
+// legacyClaims son los claims de un token emitido antes de que el claim
+// tenant_id existiera: user_id y jti válidos, tenant en zero-value.
+func legacyClaims(jti, userID uuid.UUID) value_object.TokenClaims {
+	return value_object.TokenClaims{
+		JTI:       jti,
+		UserID:    userID,
+		TenantID:  uuid.Nil,
+		ExpiresAt: time.Now().Add(time.Hour).Unix(),
+	}
+}
+
+func TestTokenRevocation_LegacyTokenDerivesTenant(t *testing.T) {
+	claims := legacyClaims(uuid.New(), uuid.New())
+	resolver := &mockTenantResolver{tenant: uuid.New()}
+	cfg := middleware.TokenRevocationConfig{JWTSecret: signingKey, AuthRepo: repo.NewMockAuthRepository(), TenantResolver: resolver}
+	r := newEngine(cfg)
+	tok := signToken(t, claims)
+	w := doRequest(t, r, "/api/x", "Bearer "+tok)
+
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, claims.UserID.String(), w.Header().Get("X-User-Id"))
+	// El tenant derivado de la base (no del token) quedó en el context.Context:
+	// es lo que downstream usa para fijar app.tenant_id.
+	assert.Equal(t, resolver.tenant.String(), w.Header().Get("X-Tenant-Id"))
+	assert.Equal(t, 1, resolver.calls)
+}
+
+func TestTokenRevocation_LegacyTokenUnknownUser401(t *testing.T) {
+	// El user_id firmado no existe: no hay tenant que derivar ni sesión que
+	// autorizar → 401, no 500 ni pass-through.
+	claims := legacyClaims(uuid.New(), uuid.New())
+	resolver := &mockTenantResolver{err: sharedservice.ErrUserNotFound}
+	cfg := middleware.TokenRevocationConfig{JWTSecret: signingKey, AuthRepo: repo.NewMockAuthRepository(), TenantResolver: resolver}
+	r := newEngine(cfg)
+	tok := signToken(t, claims)
+	w := doRequest(t, r, "/api/x", "Bearer "+tok)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	assert.Empty(t, w.Header().Get("X-User-Id"))
+	assert.Empty(t, w.Header().Get("X-Tenant-Id"))
+}
+
+func TestTokenRevocation_LegacyTokenResolverError500(t *testing.T) {
+	// Fallo de infraestructura en la derivación → fail-closed 500 (misma
+	// semántica que un error de IsTokenRevoked: no se puede verificar, no se
+	// autoriza).
+	claims := legacyClaims(uuid.New(), uuid.New())
+	resolver := &mockTenantResolver{err: errors.New("db caída")}
+	cfg := middleware.TokenRevocationConfig{JWTSecret: signingKey, AuthRepo: repo.NewMockAuthRepository(), TenantResolver: resolver}
+	r := newEngine(cfg)
+	tok := signToken(t, claims)
+	w := doRequest(t, r, "/api/x", "Bearer "+tok)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Empty(t, w.Header().Get("X-User-Id"))
+	assert.Empty(t, w.Header().Get("X-Tenant-Id"))
+}
+
+func TestTokenRevocation_LegacyTokenWithoutResolverSkipsDerivation(t *testing.T) {
+	// Sin resolver inyectado el gate mantiene el comportamiento previo: no
+	// deriva nada, no aborta por el tenant ausente (el fail-closed real lo
+	// pone la RLS del repo) y sigue consultando la revocación por JTI.
+	claims := legacyClaims(uuid.New(), uuid.New())
+	mock := repo.NewMockAuthRepository()
+	cfg := middleware.TokenRevocationConfig{JWTSecret: signingKey, AuthRepo: mock}
+	r := newEngine(cfg)
+	tok := signToken(t, claims)
+	w := doRequest(t, r, "/api/x", "Bearer "+tok)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, claims.UserID.String(), w.Header().Get("X-User-Id"))
+	assert.Empty(t, w.Header().Get("X-Tenant-Id"))
+	assert.Equal(t, 1, mock.GetCallCount("IsTokenRevoked"))
+}
+
+func TestTokenRevocation_ClaimedTenantSkipsResolver(t *testing.T) {
+	// Con claim de tenant válido NO se consulta el resolver: la derivación es
+	// sólo para el caso legacy.
+	claims := baseClaims(uuid.New())
+	resolver := &mockTenantResolver{tenant: uuid.New()}
+	cfg := middleware.TokenRevocationConfig{JWTSecret: signingKey, AuthRepo: repo.NewMockAuthRepository(), TenantResolver: resolver}
+	r := newEngine(cfg)
+	tok := signToken(t, claims)
+	w := doRequest(t, r, "/api/x", "Bearer "+tok)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, claims.TenantID.String(), w.Header().Get("X-Tenant-Id"))
+	assert.Equal(t, 0, resolver.calls)
 }

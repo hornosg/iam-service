@@ -29,8 +29,12 @@ type MockAuthRepository struct {
 	tokensByUser   map[uuid.UUID][]*entity.RefreshToken
 	federatedUsers map[string]port.UserData // key: provider:federatedID
 	revokedTokens  map[uuid.UUID]time.Time  // jti -> expiresAt
+	// userCuts replica las marcas scope='user' de revoke-all (T8i):
+	// userID -> momento del corte. IsTokenRevoked la coteja contra el iat.
+	userCuts map[uuid.UUID]time.Time
 	shouldFail     bool
 	failOnMethods  map[string]bool
+	methodErrors   map[string]error // error específico inyectado por método (p. ej. sentinelas del dominio)
 	callHistory    map[string]int
 }
 
@@ -41,7 +45,9 @@ func NewMockAuthRepository() *MockAuthRepository {
 		tokensByUser:   make(map[uuid.UUID][]*entity.RefreshToken),
 		federatedUsers: make(map[string]port.UserData),
 		revokedTokens:  make(map[uuid.UUID]time.Time),
+		userCuts:       make(map[uuid.UUID]time.Time),
 		failOnMethods:  make(map[string]bool),
+		methodErrors:   make(map[string]error),
 		callHistory:    make(map[string]int),
 	}
 }
@@ -60,12 +66,22 @@ func (r *MockAuthRepository) ShouldFailOn(method string) {
 	r.failOnMethods[method] = true
 }
 
+// FailMethodWith inyecta un error ESPECÍFICO para un método — para sentinelas
+// del dominio que el caso de uso distingue con errors.Is (T8f:
+// port.ErrRefreshTokenAlreadyConsumed). ErrMockFailedOp no sirve para eso.
+func (r *MockAuthRepository) FailMethodWith(method string, err error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.methodErrors[method] = err
+}
+
 // ResetFailures limpia todas las configuraciones de fallo
 func (r *MockAuthRepository) ResetFailures() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.shouldFail = false
 	r.failOnMethods = make(map[string]bool)
+	r.methodErrors = make(map[string]error)
 }
 
 // ResetCallHistory reinicia los contadores de llamadas
@@ -132,11 +148,14 @@ func (r *MockAuthRepository) incrementCallCount(method string) {
 	r.callHistory[method] = r.callHistory[method] + 1
 }
 
-// cloneRefreshToken crea una copia profunda de un refresh token
+// cloneRefreshToken crea una copia profunda de un refresh token. T8e: la fila
+// trae tenant_id denormalizado (NOT NULL desde la migración 021) — el clone lo
+// conserva, porque el usecase lo exige para abrir el contexto de RLS.
 func (r *MockAuthRepository) cloneRefreshToken(token *entity.RefreshToken) *entity.RefreshToken {
 	return &entity.RefreshToken{
 		ID:        token.ID,
 		UserID:    token.UserID,
+		TenantID:  token.TenantID,
 		Token:     token.Token,
 		ExpiresAt: token.ExpiresAt,
 		CreatedAt: token.CreatedAt,
@@ -195,6 +214,10 @@ func (r *MockAuthRepository) DeleteRefreshToken(ctx context.Context, token strin
 
 	if r.shouldMethodFail("DeleteRefreshToken") {
 		return ErrMockFailedOp
+	}
+
+	if err := r.methodErrors["DeleteRefreshToken"]; err != nil {
+		return err
 	}
 
 	refreshToken, exists := r.refreshTokens[token]
@@ -257,8 +280,11 @@ func (r *MockAuthRepository) RevokeToken(ctx context.Context, jti uuid.UUID, use
 	return nil
 }
 
-// IsTokenRevoked implementa la interfaz del repositorio
-func (r *MockAuthRepository) IsTokenRevoked(ctx context.Context, jti uuid.UUID) (bool, error) {
+// IsTokenRevoked implementa la interfaz del repositorio. Replica la semántica
+// real del gate (T8i): revocado por JTI o por marca scope='user' con
+// revoked_at > issuedAt (issuedAt=0 → fail-closed, cualquier marca viva
+// revoca).
+func (r *MockAuthRepository) IsTokenRevoked(ctx context.Context, jti uuid.UUID, userID uuid.UUID, issuedAt int64) (bool, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -268,8 +294,13 @@ func (r *MockAuthRepository) IsTokenRevoked(ctx context.Context, jti uuid.UUID) 
 		return false, ErrMockFailedOp
 	}
 
-	_, exists := r.revokedTokens[jti]
-	return exists, nil
+	if _, exists := r.revokedTokens[jti]; exists {
+		return true, nil
+	}
+	if cutAt, ok := r.userCuts[userID]; ok && issuedAt < cutAt.Unix() {
+		return true, nil
+	}
+	return false, nil
 }
 
 // RevokeAllUserTokens implementa la interfaz del repositorio
@@ -283,6 +314,7 @@ func (r *MockAuthRepository) RevokeAllUserTokens(ctx context.Context, userID uui
 		return ErrMockFailedOp
 	}
 
+	r.userCuts[userID] = time.Now()
 	return nil
 }
 

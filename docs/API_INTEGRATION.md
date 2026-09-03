@@ -74,15 +74,7 @@ La API utiliza autenticación JWT. Para acceder a los endpoints protegidos:
    });
    ```
 
-4. **Validar Token**:
-   ```typescript
-   const response = await fetch('http://localhost:8080/api/v1/auth/validate', {
-     method: 'GET',
-     headers: { 'Authorization': `Bearer ${token}` }
-   });
-   ```
-
-5. **Logout**:
+4. **Logout**:
    ```typescript
    const response = await fetch('http://localhost:8080/api/v1/auth/logout', {
      method: 'POST',
@@ -95,7 +87,6 @@ La API utiliza autenticación JWT. Para acceder a los endpoints protegidos:
 ### Auth Module - `/api/v1/auth`
 - `POST /login` - Autenticación de usuario
 - `POST /refresh` - Refrescar token de acceso
-- `GET /validate` - Validar token activo
 - `POST /logout` - Cerrar sesión
 
 ### User Module - `/api/v1/users`
@@ -390,10 +381,6 @@ class IAMApiClient {
       method: 'POST',
       body: JSON.stringify({ refresh_token: refreshToken })
     });
-  }
-
-  async validateToken() {
-    return this.fetch('/auth/validate');
   }
 
   async logout() {

@@ -39,27 +39,52 @@ type querier interface {
 	QueryRowContext(context.Context, string, ...interface{}) *sql.Row
 }
 
-// withRLS corre fn dentro de una transacción que fija app.tenant_id cuando el
-// contexto porta un tenant_id; si no, corre sobre el pool directo. Patrón copiado
-// de src/auth/infrastructure/persistence/repository/postgres_auth_repository.go
+// withRLS corre fn dentro de una transacción que fija los GUC de sesión que el
+// contexto justifica: app.tenant_id si porta un tenant_id, y app.is_system_admin
+// si el gate de autorización (Authorize, T8d) verificó la autoridad system_admin.
+// Sin ninguno de los dos, corre sobre el pool directo (fail-closed: contra la 019
+// toda policy evalúa NULL → 0 filas). Patrón copiado de
+// src/auth/infrastructure/persistence/repository/postgres_auth_repository.go
 // (ACC-E02 T4/T5) y requerido por T8b para que las policies RLS de tenants vean
 // el tenant de sesión.
 func withRLS[T any](ctx context.Context, db *sql.DB, fn func(context.Context, querier) (T, error)) (T, error) {
+	locals := map[string]string{}
 	if tenantID, ok := sharedctx.TenantIDFromContext(ctx); ok {
-		var result T
-		err := sharedpostgres.WithRLSInTransaction(ctx, db, tenantID, func(ctx context.Context, tx *sql.Tx) error {
-			var err error
-			result, err = fn(ctx, tx)
-			return err
-		})
-		return result, err
+		locals[sharedpostgres.TenantVar] = tenantID.String()
 	}
-	return fn(ctx, db)
+	if sharedctx.IsSystemAdminFromContext(ctx) {
+		locals[sharedpostgres.SystemAdminVar] = sharedpostgres.SystemAdminTrue
+	}
+	if len(locals) == 0 {
+		return fn(ctx, db)
+	}
+	var result T
+	err := sharedpostgres.WithSessionLocals(ctx, db, locals, func(ctx context.Context, tx *sql.Tx) error {
+		var err error
+		result, err = fn(ctx, tx)
+		return err
+	})
+	return result, err
 }
 
-// Create inserta un nuevo tenant en la base de datos
+// Create inserta un nuevo tenant en la base de datos.
+//
+// ACC-E02 T8d — por qué NO corre por withRLS ni fija app.is_system_admin:
+// el caller (POST /tenants, provision) no tiene tenant de sesión y, por lo
+// general, tampoco autoridad system_admin verificada (el gate de provision
+// acepta el scope tenant:provision a secas). Fijar app.is_system_admin desde
+// ese scope está PROHIBIDO por la condición vinculante del gate L4 de T8b
+// (objeción (C)-1): ese GUC abre la tabla `tenants` entera y sólo puede
+// derivarse de un scope `system:admin` verificado. La policy tenant_isolation
+// (019) acepta el INSERT por la otra rama del WITH CHECK — id = app.tenant_id —
+// así que esta transacción corre con app.tenant_id = id del tenant que nace:
+// es la autoridad mínima para el caso de uso (la fila que se crea; el GUC
+// muere con la tx por SET LOCAL) y un caller provision no gana por esto
+// ninguna lectura ni escritura cross-tenant.
 func (r *PostgresTenantRepository) Create(ctx context.Context, tenant *entity.Tenant) error {
-	_, err := withRLS(ctx, r.db, func(ctx context.Context, q querier) (struct{}, error) {
+	err := sharedpostgres.WithSessionLocals(ctx, r.db, map[string]string{
+		sharedpostgres.TenantVar: tenant.ID.String(),
+	}, func(ctx context.Context, tx *sql.Tx) error {
 		query := `
 			INSERT INTO tenants (
 				id, name, slug, description, type, status, owner_id, domain,
@@ -71,17 +96,17 @@ func (r *PostgresTenantRepository) Create(ctx context.Context, tenant *entity.Te
 
 		settingsJSON, err := json.Marshal(tenant.Settings)
 		if err != nil {
-			return struct{}{}, fmt.Errorf("error marshaling settings: %w", err)
+			return fmt.Errorf("error marshaling settings: %w", err)
 		}
 
 		featuresJSON, err := json.Marshal(tenant.GetFeatures())
 		if err != nil {
-			return struct{}{}, fmt.Errorf("error marshaling features: %w", err)
+			return fmt.Errorf("error marshaling features: %w", err)
 		}
 
 		domainVal := sql.NullString{String: tenant.Domain, Valid: tenant.Domain != ""}
 
-		_, err = q.ExecContext(ctx, query,
+		_, err = tx.ExecContext(ctx, query,
 			tenant.ID,
 			tenant.Name,
 			tenant.Slug,
@@ -106,16 +131,16 @@ func (r *PostgresTenantRepository) Create(ctx context.Context, tenant *entity.Te
 				if pqErr.Code == "23505" {
 					switch pqErr.Constraint {
 					case "tenants_slug_unique":
-						return struct{}{}, exception.ErrSlugAlreadyExists
+						return exception.ErrSlugAlreadyExists
 					case "tenants_domain_unique":
-						return struct{}{}, exception.ErrDomainAlreadyExists
+						return exception.ErrDomainAlreadyExists
 					}
 				}
 			}
-			return struct{}{}, fmt.Errorf("error creating tenant: %w", err)
+			return fmt.Errorf("error creating tenant: %w", err)
 		}
 
-		return struct{}{}, nil
+		return nil
 	})
 	return err
 }

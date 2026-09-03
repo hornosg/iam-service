@@ -88,6 +88,9 @@ func TestWithRLSInTransaction_FallaSiNoPuedeFijarElTenant(t *testing.T) {
 		})
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "set tenant_id")
+	// T8e: el mensaje ahora nombra la GUC completa (WithSessionLocals es
+	// genérico); el candado sigue siendo que un fallo del SET LOCAL aborta la
+	// transacción antes de correr fn.
+	assert.Contains(t, err.Error(), "set app.tenant_id")
 	assert.False(t, conn.Committed)
 }

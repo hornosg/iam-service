@@ -36,3 +36,25 @@ func TenantIDFromContext(ctx context.Context) (uuid.UUID, bool) {
 		return uuid.UUID{}, false
 	}
 }
+
+type systemAdminKey struct{}
+
+// WithSystemAdmin marca en el contexto que el gate de autorización YA verificó
+// la autoridad system_admin del llamador (scope S2S `system:admin` resuelto
+// contra el registry, o rol `system_admin` verificado contra allowedRoles).
+// ACC-E02 T8d: este flag alimenta el GUC `app.is_system_admin`, que abre el
+// branch cross-tenant de la policy de `tenants` (019) — la tabla entera. Por eso
+// su ÚNICO origen válido es la decisión de autorización de Authorize: jamás se
+// fija desde un claim crudo del JWT (un `is_system_admin` inyectado en un token
+// con rol tenant_admin no abre nada — test de T8d).
+func WithSystemAdmin(ctx context.Context) context.Context {
+	return context.WithValue(ctx, systemAdminKey{}, true)
+}
+
+// IsSystemAdminFromContext reporta si el gate de autorización verificó la
+// autoridad system_admin para esta request. Ausencia → false: los consumidores
+// del flag deben tratarlo fail-closed.
+func IsSystemAdminFromContext(ctx context.Context) bool {
+	v, ok := ctx.Value(systemAdminKey{}).(bool)
+	return ok && v
+}

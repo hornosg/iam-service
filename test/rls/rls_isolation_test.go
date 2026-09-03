@@ -29,6 +29,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sync"
 	"testing"
 	"time"
 
@@ -68,6 +69,10 @@ const (
 	testAppPassword     = "test_account_app"
 	testLoginPassword   = "test_iam_login"
 	testAdminPassword   = "StrongP@ssw0rd"
+	// ACC-E02 T8d: keys S2S de prueba con las políticas reales del ServicePolicy
+	// (sales → system:admin; whatsapp-agent → tenant:provision a secas).
+	testSalesKey    = "test-sales-s2s-key-0123456789abcdef"
+	testWhatsappKey = "test-whatsapp-s2s-key-0123456789abcdef"
 )
 
 // testRLSServer levanta PostgreSQL + migraciones + router IAM conectado como account_app/iam_login.
@@ -165,9 +170,17 @@ func newTestRLSServer(t *testing.T) *testRLSServer {
 	apiV1 := router.Group("/api/v1")
 	metricsRecorder := noopMetricsRecorder{}
 
-	s2sRegistry := s2s.LoadFromEnvForTests(map[string]string{})
-	authFactory := authmw.NewScopeMiddlewareFactory(testJWTSecret, testNamespace, s2sRegistry)
+	s2sRegistry := s2s.LoadFromEnvForTests(map[string]string{
+		"sales":          testSalesKey,
+		"whatsapp-agent": testWhatsappKey,
+	})
 
+	// ACC-E02 T8g (criterio (a)): el gate de revocación se registra sobre apiV1
+	// ANTES de crear los grupos de gestión — Gin congela la cadena de handlers al
+	// crear el grupo, y un Use() posterior sobre el padre no los alcanza.
+	authRepoApp := authconfig.SetupTokenRevocationGate(apiV1, appDB, loginDB, testJWTSecret)
+
+	authFactory := authmw.NewScopeMiddlewareFactory(testJWTSecret, testNamespace, s2sRegistry)
 	adminGroup := apiV1.Group("", authFactory.RequireScope(s2s.ScopeSystemAdmin, "system_admin"))
 	tenantScopedGroup := apiV1.Group("", authFactory.RequireScopes([]s2s.Scope{s2s.ScopeSystemAdmin, s2s.ScopeTenantAdmin}, "tenant_admin", "system_admin"))
 
@@ -185,7 +198,7 @@ func newTestRLSServer(t *testing.T) *testRLSServer {
 		RefreshTokenExpiry: 7 * 24 * time.Hour,
 		Namespace:          testNamespace,
 	}
-	authconfig.SetupAuthModule(apiV1, appDB, loginDB, userFinderService, loginUserFinder, tenantService, authCfg)
+	authconfig.SetupAuthModule(apiV1, appDB, loginDB, authRepoApp, userFinderService, loginUserFinder, tenantService, authCfg)
 
 	planconfig.SetupPlanModule(adminGroup, appDB)
 	roleconfig.SetupRoleModule(tenantScopedGroup, adminGroup, appDB)
@@ -456,12 +469,14 @@ func TestRLS_CrossTenantIsolation(t *testing.T) {
 // B refresca el suyo) distinguen aislamiento correcto de un fail-closed global,
 // que es exactamente el modo de fallo que el checkpoint de T8 (2026-08-29)
 // encontró en users/tenants antes de T8b.
-func seedRefreshToken(t *testing.T, db *sql.DB, userID uuid.UUID, token string) {
+func seedRefreshToken(t *testing.T, db *sql.DB, tenantID, userID uuid.UUID, token string) {
 	t.Helper()
+	// T8e: la 021 denormaliza tenant_id como NOT NULL — el seed lo trae, igual
+	// que hace CreateRefreshToken en la app (INSERT con tenant_id, WITH CHECK).
 	_, err := db.Exec(`
-		INSERT INTO refresh_tokens (id, user_id, token, expires_at, created_at)
-		VALUES ($1, $2, $3, $4, NOW())`,
-		uuid.New(), userID, token, time.Now().Add(7*24*time.Hour))
+		INSERT INTO refresh_tokens (id, user_id, tenant_id, token, expires_at, created_at)
+		VALUES ($1, $2, $3, $4, $5, NOW())`,
+		uuid.New(), userID, tenantID, token, time.Now().Add(7*24*time.Hour))
 	require.NoError(t, err)
 }
 
@@ -494,10 +509,10 @@ func TestRLS_TokensDeSesion(t *testing.T) {
 
 	// Un refresh token por subtest: el refresh consume el token (DELETE), así
 	// que reutilizar uno acoplaría subtests entre sí.
-	seedRefreshToken(t, ts.SuperDB, ts.UserA, "rt-a-propio")
-	seedRefreshToken(t, ts.SuperDB, ts.UserA, "rt-a-para-b")
-	seedRefreshToken(t, ts.SuperDB, ts.UserB, "rt-b-propio")
-	seedRefreshToken(t, ts.SuperDB, ts.UserB, "rt-b-para-a")
+	seedRefreshToken(t, ts.SuperDB, ts.TenantA, ts.UserA, "rt-a-propio")
+	seedRefreshToken(t, ts.SuperDB, ts.TenantA, ts.UserA, "rt-a-para-b")
+	seedRefreshToken(t, ts.SuperDB, ts.TenantB, ts.UserB, "rt-b-propio")
+	seedRefreshToken(t, ts.SuperDB, ts.TenantB, ts.UserB, "rt-b-para-a")
 
 	t.Run("B puede refrescar su propio refresh token", func(t *testing.T) {
 		resp := postJSON(t, base+"/auth/refresh", "", map[string]string{"refresh_token": "rt-b-propio"})
@@ -523,10 +538,27 @@ func TestRLS_TokensDeSesion(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	})
 
-	t.Run("logout de B responde 204", func(t *testing.T) {
+	t.Run("logout de B responde 204 habiendo revocado de verdad", func(t *testing.T) {
+		// El 204 solo no dice nada: antes el INSERT de RevokeToken violaba el
+		// WITH CHECK (sin app.tenant_id) y el error se descartaba en logout.go
+		// con `_ =` — el logout respondía 204 sin haber revocado nada (defecto
+		// (2) del checkpoint de T8). Se exige el JTI presente en revoked_tokens
+		// Y que el propio gate rechace el token recién revocado con 401.
 		resp := postJSON(t, base+"/auth/logout", ts.TokenB, map[string]string{})
 		defer resp.Body.Close()
 		assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+
+		jti := jtiDe(t, ts.TokenB)
+		var revocado bool
+		require.NoError(t, ts.SuperDB.QueryRow(
+			`SELECT EXISTS(SELECT 1 FROM revoked_tokens WHERE jti = $1)`, jti).Scan(&revocado),
+			"el logout debe dejar el JTI en revoked_tokens")
+		assert.True(t, revocado, "el JTI del token de B debe estar revocado tras el logout")
+
+		resp2 := postJSON(t, base+"/auth/revoke-all", ts.TokenB, map[string]string{})
+		defer resp2.Body.Close()
+		assert.Equal(t, http.StatusUnauthorized, resp2.StatusCode,
+			"un token cuyo JTI quedó revocado debe ser rechazado con 401, no llegar al handler")
 	})
 
 	t.Run("un JTI revocado de B es rechazado por el gate de revocación", func(t *testing.T) {
@@ -538,5 +570,407 @@ func TestRLS_TokensDeSesion(t *testing.T) {
 		resp := postJSON(t, base+"/auth/revoke-all", ts.TokenB, map[string]string{})
 		defer resp.Body.Close()
 		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	})
+}
+
+// — Rotación single-use concurrente (T8f): hallazgo 1 del gate L4 de T8e-2.
+// La rotación es check-then-act en transacciones separadas y el DELETE de
+// DeleteRefreshToken descartaba RowsAffected: dos refresh concurrentes con el
+// MISMO token pasaban ambos el escape de presentación, uno borraba 1 y el otro
+// 0 sin error, y AMBOS emitían credenciales nuevas. Bajo READ COMMITTED el
+// segundo DELETE se bloquea en el row lock del primero, re-evalúa el WHERE,
+// ve 0 filas y aborta: exactamente un request gana. El test corre contra
+// Postgres real — los row locks no existen en un mock, y un test secuencial
+// nunca ve una lost update (tx-consistency-go).
+func TestRLS_RotacionSingleUseConcurrente(t *testing.T) {
+	ts := newTestRLSServer(t)
+	base := ts.Server.URL + "/api/v1"
+
+	const rt = "rt-single-use-concurrente"
+	seedRefreshToken(t, ts.SuperDB, ts.TenantA, ts.UserA, rt)
+
+	// Los dos requests corren en goroutines: postJSON exige (require) sobre el
+	// *testing.T del padre, que no es válido fuera del goroutine de test.
+	doRefresh := func() int {
+		b, err := json.Marshal(map[string]string{"refresh_token": rt})
+		if err != nil {
+			return -1
+		}
+		req, err := http.NewRequest(http.MethodPost, base+"/auth/refresh", bytes.NewReader(b))
+		if err != nil {
+			return -1
+		}
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return -1
+		}
+		defer resp.Body.Close()
+		return resp.StatusCode
+	}
+
+	const intentos = 2
+	codigos := make(chan int, intentos)
+	var wg sync.WaitGroup
+	for i := 0; i < intentos; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			codigos <- doRefresh()
+		}()
+	}
+	wg.Wait()
+	close(codigos)
+
+	exitosos, rechazados, otros := 0, 0, 0
+	for codigo := range codigos {
+		switch codigo {
+		case http.StatusOK:
+			exitosos++
+		case http.StatusUnauthorized:
+			rechazados++
+		default:
+			otros++
+		}
+	}
+
+	assert.Equal(t, 1, exitosos,
+		"exactamente UNA de las dos rotaciones con el mismo token puede tener éxito: es la propiedad single-use")
+	assert.Equal(t, 1, rechazados,
+		"el request que perdió la carrera debe recibir 401 (credencial inválida), no 500")
+	assert.Equal(t, 0, otros,
+		"ningún otro código de estado es admisible: ni 500 (carrera tratada como infraestructura) ni 2xx doble")
+
+	// Evidencia en la base de la consecuencia del hallazgo: si ambos hubieran
+	// tenido éxito, quedarían DOS credenciales vivas nacidas de una.
+	var restantes int
+	require.NoError(t, ts.SuperDB.QueryRow(
+		`SELECT COUNT(*) FROM refresh_tokens WHERE user_id = $1`, ts.UserA).Scan(&restantes))
+	assert.Equal(t, 1, restantes,
+		"sólo la rotación exitosa emite un reemplazo para el usuario")
+}
+
+// — Gate de revocación sobre las rutas de gestión (ACC-E02 T8g, criterio (b)).
+// Hallazgo 3 del gate L4 de T8e-2: adminGroup/tenantScopedGroup se creaban
+// ANTES del Use() del gate sobre apiV1, y Gin congela la cadena de handlers al
+// crear el grupo → un JTI revocado seguía autorizando /users, /tenants/:id,
+// /roles y /plans hasta la expiración por tiempo (≤15 min). Logout y revoke-all
+// no cortaban el acceso a esas rutas. La evidencia exige UN endpoint de cada
+// grupo Y controles positivos previos: sin ellos, un 401 universal (fail-closed
+// global) sería indistinguible de aislamiento correcto — el mismo modo de fallo
+// que el checkpoint de T8 (2026-08-29) detectó en users/tenants.
+func TestRLS_GateRevocacionCubreGestion(t *testing.T) {
+	ts := newTestRLSServer(t)
+	base := ts.Server.URL + "/api/v1"
+
+	// Controles positivos: sin revocación, los cuatro endpoints autorizan.
+	// /users y /tenants/:id son tenantScopedGroup; /roles (lectura) es
+	// tenantScopedGroup; /plans es adminGroup (system:admin → key S2S de sales,
+	// que tiene scope system:admin).
+	t.Run("sin revocación, los endpoints de gestión autorizan", func(t *testing.T) {
+		resp := get(t, base+"/users", ts.TokenA, map[string]string{"X-Tenant-ID": ts.TenantA.String()})
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusOK, resp.StatusCode, "/users debe autorizar un token vivo")
+
+		resp2 := get(t, fmt.Sprintf("%s/tenants/%s", base, ts.TenantA.String()), ts.TokenA, nil)
+		defer resp2.Body.Close()
+		assert.Equal(t, http.StatusOK, resp2.StatusCode, "/tenants/:id debe autorizar un token vivo")
+
+		resp3 := get(t, base+"/roles", ts.TokenA, nil)
+		defer resp3.Body.Close()
+		assert.Equal(t, http.StatusOK, resp3.StatusCode, "/roles debe autorizar un token vivo")
+
+		resp4 := get(t, base+"/plans", "", map[string]string{"X-API-Key": testSalesKey})
+		defer resp4.Body.Close()
+		assert.Equal(t, http.StatusOK, resp4.StatusCode, "/plans debe autorizar una key S2S con system:admin")
+	})
+
+	// Se revoca el JTI del token de A (seed directo como superuser, mismo
+	// mecanismo que TestRLS_TokensDeSesion).
+	seedRevokedJTI(t, ts.SuperDB, jtiDe(t, ts.TokenA), ts.UserA)
+
+	t.Run("JTI revocado → 401 en los endpoints de gestión", func(t *testing.T) {
+		// El gate aborta ANTES de la autorización de scope: la respuesta es 401
+		// (token revocado), no 403 (scope insuficiente) ni 500.
+		resp := get(t, base+"/users", ts.TokenA, map[string]string{"X-Tenant-ID": ts.TenantA.String()})
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, "logout/revoke-all deben cortar también /users")
+
+		resp2 := get(t, fmt.Sprintf("%s/tenants/%s", base, ts.TenantA.String()), ts.TokenA, nil)
+		defer resp2.Body.Close()
+		assert.Equal(t, http.StatusUnauthorized, resp2.StatusCode, "logout/revoke-all deben cortar también /tenants/:id")
+
+		resp3 := get(t, base+"/roles", ts.TokenA, nil)
+		defer resp3.Body.Close()
+		assert.Equal(t, http.StatusUnauthorized, resp3.StatusCode, "logout/revoke-all deben cortar también /roles")
+
+		resp4 := get(t, base+"/plans", ts.TokenA, nil)
+		defer resp4.Body.Close()
+		assert.Equal(t, http.StatusUnauthorized, resp4.StatusCode, "logout/revoke-all deben cortar también /plans")
+	})
+
+	t.Run("S2S sin JWT sigue pasando el gate (no hay JTI que revocar)", func(t *testing.T) {
+		// El gate es pasivo sin Authorization header: una key S2S con scope no
+		// debe verse afectada por la revocación de JTIs ajenos.
+		resp := get(t, base+"/plans", "", map[string]string{"X-API-Key": testSalesKey})
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+	})
+}
+
+func makeLegacyAccessToken(t *testing.T, userID, roleID uuid.UUID, email string) string {
+	t.Helper()
+	// Sin NewTokenClaims: ese constructor exige tenant. Este es el shape de un
+	// token emitido antes de que el claim tenant_id existiera.
+	claims := value_object.TokenClaims{
+		JTI:       uuid.New(),
+		Issuer:    "iam-service",
+		Namespace: testNamespace,
+		UserID:    userID,
+		Email:     email,
+		TenantID:  uuid.Nil,
+		RoleID:    roleID,
+		Roles:     []string{"tenant_admin"},
+		Features:  value_object.DefaultTenantFeatures(),
+		ExpiresAt: time.Now().Add(15 * time.Minute).Unix(),
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, adapter.JWTClaims{TokenClaims: claims})
+	tokenStr, err := token.SignedString([]byte(testJWTSecret))
+	require.NoError(t, err)
+	return tokenStr
+}
+
+func TestRLS_LogoutTokenLegacySinTenant(t *testing.T) {
+	ts := newTestRLSServer(t)
+	base := ts.Server.URL + "/api/v1"
+
+	seedRefreshToken(t, ts.SuperDB, ts.TenantA, ts.UserA, "rt-legacy-logout")
+	legacyToken := makeLegacyAccessToken(t, ts.UserA, ts.RoleID, "admin-a@example.com")
+
+	t.Run("token legacy autoriza gestión con tenant derivado (no 500 en bloque)", func(t *testing.T) {
+		// El "ojo al implementar" del gate de T8e-1 (hallazgo 6): extender el
+		// gate a más rutas ensancha la superficie de 500 para tokens legacy.
+		// La derivación la cierra: el token legacy ve SU tenant (aislamiento
+		// intacto — no ve los users de B), no un 500.
+		url := fmt.Sprintf("%s/users", base)
+		resp := get(t, url, legacyToken, map[string]string{"X-Tenant-ID": ts.TenantA.String()})
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+	})
+
+	t.Run("logout del token legacy revoca de verdad (204, no 500)", func(t *testing.T) {
+		resp := postJSON(t, base+"/auth/logout", legacyToken, map[string]string{})
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusNoContent, resp.StatusCode,
+			"un token sin claim de tenant debe poder cerrar su sesión: el tenant se deriva del user_id verificado")
+
+		var jti, uid uuid.UUID
+		parsedClaims := &adapter.JWTClaims{}
+		_, err := jwt.ParseWithClaims(legacyToken, parsedClaims, func(*jwt.Token) (interface{}, error) {
+			return []byte(testJWTSecret), nil
+		})
+		require.NoError(t, err)
+		require.NoError(t, ts.SuperDB.QueryRow(
+			`SELECT jti, user_id FROM revoked_tokens WHERE user_id = $1 LIMIT 1`, ts.UserA).
+			Scan(&jti, &uid), "el logout del token legacy debe dejar el JTI en revoked_tokens")
+		assert.Equal(t, parsedClaims.TokenClaims.JTI, jti,
+			"el JTI revocado debe ser el del token legacy que cerró sesión")
+		assert.Equal(t, ts.UserA, uid)
+
+		// DeleteAllUserRefreshTokens también corrió: la sesión quedó cerrada de
+		// verdad, no sólo revocado el access token.
+		var restantes int
+		require.NoError(t, ts.SuperDB.QueryRow(
+			`SELECT COUNT(*) FROM refresh_tokens WHERE user_id = $1`, ts.UserA).Scan(&restantes))
+		assert.Equal(t, 0, restantes, "el logout debe borrar también los refresh tokens del usuario")
+	})
+
+	t.Run("el token legacy ya revocado es rechazado por el gate", func(t *testing.T) {
+		resp := postJSON(t, base+"/auth/revoke-all", legacyToken, map[string]string{})
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode,
+			"tras el logout, el gate debe rechazar el token legacy con 401 (JTI en revoked_tokens)")
+	})
+}
+
+// — Revoke-all por corte de usuario (T8i): hallazgo del gate L4 de T8g.
+// Antes, RevokeAllUserTokens insertaba en revoked_tokens un JTI ALEATORIO que
+// el gate jamás consulta (IsTokenRevoked busca el JTI del token PRESENTADO):
+// POST /auth/revoke-all respondía OK habiendo insertado una fila decorativa y
+// TODOS los access tokens del usuario seguían válidos hasta expirar. Quien
+// sospecha que le robaron la sesión y pide cerrar todas, no cerraba ninguna.
+//
+// La semántica materializada (migración 023): marca por user_id + revoked_at
+// con scope='user' que el gate coteja contra el iat del token — queda
+// revocado todo token EMITIDO ANTES del corte; los emitidos después siguen
+// válidos. El logout de una sola sesión (marca scope='jti') NO cruza al
+// predicado por usuario (criterio (c) de T8i), y un token legacy sin iat
+// queda revocado por cualquier marca viva (fail-closed).
+func TestRLS_RevokeAllCortePorUsuario(t *testing.T) {
+	ts := newTestRLSServer(t)
+	base := ts.Server.URL + "/api/v1"
+
+	// tokenPreCut es ts.TokenA: emitido en el setup, ANTES de cualquier corte.
+	tokenPreCut := ts.TokenA
+
+	// Helper local: access token de A/B con iat controlado. El corte se coteja
+	// por iat, así que cada subtest firma el token con la emisión que prueba.
+	makeTokenConIat := func(userID, tenantID uuid.UUID, email string, issuedAt time.Time) string {
+		t.Helper()
+		claims := value_object.NewTokenClaims(
+			userID, tenantID, ts.RoleID, email, testNamespace,
+			value_object.DefaultTenantFeatures(),
+			issuedAt.Add(15*time.Minute),
+		)
+		claims.Roles = []string{"tenant_admin"}
+		claims.IssuedAt = issuedAt.Unix()
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, adapter.JWTClaims{TokenClaims: *claims})
+		tokenStr, err := token.SignedString([]byte(testJWTSecret))
+		require.NoError(t, err)
+		return tokenStr
+	}
+
+	var corte time.Time
+
+	t.Run("control positivo: un token emitido antes del corte autoriza antes de revoke-all", func(t *testing.T) {
+		// El control que distingue "el gate funciona" de "todo da 401": sin
+		// corte previo, el token del usuario autoriza gestión.
+		resp := get(t, base+"/users", tokenPreCut, map[string]string{"X-Tenant-ID": ts.TenantA.String()})
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+	})
+
+	t.Run("POST /auth/revoke-all responde OK", func(t *testing.T) {
+		resp := postJSON(t, base+"/auth/revoke-all", tokenPreCut, map[string]string{})
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		// El corte exacto es el revoked_at de la marca en la DB (no un reloj
+		// aproximado): los subtests siguientes firman tokens alrededor de él.
+		require.NoError(t, ts.SuperDB.QueryRow(
+			`SELECT revoked_at FROM revoked_tokens WHERE user_id = $1 AND scope = 'user' ORDER BY revoked_at DESC LIMIT 1`,
+			ts.UserA).Scan(&corte),
+			"revoke-all debe haber insertado la marca scope='user'")
+	})
+
+	t.Run("la marca de alcance user quedó en revoked_tokens", func(t *testing.T) {
+		var marcas int
+		require.NoError(t, ts.SuperDB.QueryRow(
+			`SELECT COUNT(*) FROM revoked_tokens WHERE user_id = $1 AND scope = 'user'`,
+			ts.UserA).Scan(&marcas),
+			"revoke-all debe insertar una marca scope='user' (migración 023), no un JTI decorativo")
+		assert.GreaterOrEqual(t, marcas, 1)
+	})
+
+	t.Run("el access token emitido ANTES del corte recibe 401 (criterio (a) de T8i)", func(t *testing.T) {
+		// El defecto original: este request devolvía 200 — el JTI sembrado por
+		// revoke-all jamás matcheaba el del token presentado.
+		resp := get(t, base+"/users", tokenPreCut, map[string]string{"X-Tenant-ID": ts.TenantA.String()})
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode,
+			"un token emitido antes de revoke-all debe quedar revocado por la marca de usuario")
+	})
+
+	t.Run("un token emitido DESPUÉS del corte sigue autorizando", func(t *testing.T) {
+		// Sin este control, "todo da 401" sería indistinguible de aislamiento
+		// correcto: la marca es un CORTE (revoked_at > iat), no un veto al
+		// usuario entero — el usuario debe poder volver a loguearse.
+		tokenPost := makeTokenConIat(ts.UserA, ts.TenantA, "admin-a@example.com", corte.Add(5*time.Second))
+		resp := get(t, base+"/users", tokenPost, map[string]string{"X-Tenant-ID": ts.TenantA.String()})
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+	})
+
+	t.Run("el corte de A no alcanza a B (RLS + predicado por user_id)", func(t *testing.T) {
+		resp := get(t, base+"/users", ts.TokenB, map[string]string{"X-Tenant-ID": ts.TenantB.String()})
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusOK, resp.StatusCode,
+			"la marca scope='user' de A no debe revocar tokens de otro usuario")
+	})
+
+	t.Run("logout de una sola sesión NO corta los demás tokens (criterio (c))", func(t *testing.T) {
+		// Dos tokens de A emitidos después del corte. El logout de uno (marca
+		// scope='jti' con revoked_at posterior al iat del otro) NO debe
+		// revocarlo: sin el discriminador scope, un predicado por user_id +
+		// revoked_at convertiría el logout en un revoke-all implícito.
+		otro := makeTokenConIat(ts.UserA, ts.TenantA, "admin-a@example.com", corte.Add(10*time.Second))
+
+		respLogout := postJSON(t, base+"/auth/logout", otro, map[string]string{})
+		defer respLogout.Body.Close()
+		assert.Equal(t, http.StatusNoContent, respLogout.StatusCode,
+			"el logout de una sola sesión sigue funcionando")
+
+		resp := get(t, base+"/users", otro, map[string]string{"X-Tenant-ID": ts.TenantA.String()})
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode,
+			"el JTI del token logueado queda revocado")
+
+		tercero := makeTokenConIat(ts.UserA, ts.TenantA, "admin-a@example.com", corte.Add(10*time.Second))
+		resp3 := get(t, base+"/users", tercero, map[string]string{"X-Tenant-ID": ts.TenantA.String()})
+		defer resp3.Body.Close()
+		assert.Equal(t, http.StatusOK, resp3.StatusCode,
+			"la marca scope='jti' del logout no debe revocar otro token emitido antes del logout")
+	})
+
+	t.Run("token legacy sin iat queda revocado por la marca viva (fail-closed)", func(t *testing.T) {
+		// Un token sin iat (legacy) no puede probar cuándo fue emitido: tras
+		// revoke-all, cualquier marca user viva del usuario lo revoca.
+		legacy := makeLegacyAccessToken(t, ts.UserA, ts.RoleID, "admin-a@example.com")
+		resp := get(t, base+"/users", legacy, map[string]string{"X-Tenant-ID": ts.TenantA.String()})
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	})
+
+	t.Run("token legacy SIN marca de usuario sigue autorizando", func(t *testing.T) {
+		// El fail-closed del iat=0 aplica sólo donde existe un corte: B no
+		// tiene marca scope='user' y su token legacy (sin iat) sigue válido.
+		legacyB := makeLegacyAccessToken(t, ts.UserB, ts.RoleID, "admin-b@example.com")
+		resp := get(t, base+"/users", legacyB, map[string]string{"X-Tenant-ID": ts.TenantB.String()})
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+	})
+
+	t.Run("el \"Ojo\" de la tarea: el índice cubre el predicado nuevo del gate", func(t *testing.T) {
+		// El gate pasa a evaluar un predicado por user_id en CADA request. El
+		// plan debe usar los índices (pkey para jti, idx_revoked_tokens_user_scope
+		// parcial para la marca de usuario), no un Seq Scan. enable_seqscan=off
+		// fuerza la visibilidad del camino por índice en una tabla de prueba
+		// con pocas filas, donde el planner elegiría seq scan por costo.
+		var existeIndice int
+		require.NoError(t, ts.SuperDB.QueryRow(
+			`SELECT COUNT(*) FROM pg_indexes WHERE indexname = 'idx_revoked_tokens_user_scope'`).
+			Scan(&existeIndice))
+		assert.Equal(t, 1, existeIndice, "el índice parcial de la 023 debe existir")
+
+		var existeConstraint int
+		require.NoError(t, ts.SuperDB.QueryRow(
+			`SELECT COUNT(*) FROM pg_constraint WHERE conrelid = 'revoked_tokens'::regclass AND conname = 'revoked_tokens_scope_check'`).
+			Scan(&existeConstraint))
+		assert.Equal(t, 1, existeConstraint, "el CHECK de scope debe existir")
+
+		ctx := context.Background()
+		tx, err := ts.SuperDB.BeginTx(ctx, nil)
+		require.NoError(t, err)
+		defer tx.Rollback()
+		_, err = tx.Exec("SET LOCAL enable_seqscan = off")
+		require.NoError(t, err)
+
+		rows, err := tx.Query(`
+			EXPLAIN SELECT EXISTS(
+				SELECT 1 FROM revoked_tokens
+				WHERE jti = $1
+				   OR (scope = 'user' AND user_id = $2 AND revoked_at > to_timestamp($3))
+			)`, uuid.New(), ts.UserA, time.Now().Unix())
+		require.NoError(t, err)
+		defer rows.Close()
+		plan := ""
+		for rows.Next() {
+			var line string
+			require.NoError(t, rows.Scan(&line))
+			plan += line + "\n"
+		}
+		require.NoError(t, rows.Err())
+
+		assert.Contains(t, plan, "BitmapOr", "el OR del gate debe resolverse por índices:\n%s", plan)
+		assert.Contains(t, plan, "idx_revoked_tokens_user_scope", "la marca de usuario debe resolverse por el índice parcial:\n%s", plan)
 	})
 }

@@ -168,6 +168,16 @@ func main() {
 		log.Fatalf("Error loading S2S registry: %v", err)
 	}
 	jwtSecret := os.Getenv("JWT_SECRET")
+
+	// Gate de revocación de tokens — ACC-E02 T8g (criterio (a)): DEBE registrarse
+	// sobre apiV1 ANTES de crear adminGroup/tenantScopedGroup/provisionGroup. Gin
+	// congela la cadena de handlers de un grupo en el momento de crearlo; el
+	// registro posterior de un Use() sobre el padre (como hacía SetupAuthModule)
+	// no los alcanzaba y un JTI revocado seguía autorizando /users, /tenants/:id,
+	// /roles y /plans hasta la expiración por tiempo del access token.
+	// Devuelve el repo de auth sobre account_app que comparte con SetupAuthModule.
+	authRepoApp := config.SetupTokenRevocationGate(apiV1, appDB, loginDB, jwtSecret)
+
 	authFactory := authmw.NewScopeMiddlewareFactory(jwtSecret, serviceNamespace, s2sRegistry)
 	adminGroup := apiV1.Group("", authFactory.RequireScope(s2s.ScopeSystemAdmin, "system_admin"))
 	tenantScopedGroup := apiV1.Group("", authFactory.RequireScopes([]s2s.Scope{s2s.ScopeSystemAdmin, s2s.ScopeTenantAdmin}, "tenant_admin", "system_admin"))
@@ -194,7 +204,7 @@ func main() {
 	// El adapter convierte tenant_vo.TenantFeatures → auth_vo.TenantFeatures (anti-corruption layer)
 	tenantService := adapter.NewTenantFeaturesAdapter(tenantFeaturesUC)
 	authConfig := config.NewAuthModuleConfigFromEnv()
-	config.SetupAuthModule(apiV1, appDB, loginDB, userFinderService, loginUserFinder, tenantService, authConfig)
+	config.SetupAuthModule(apiV1, appDB, loginDB, authRepoApp, userFinderService, loginUserFinder, tenantService, authConfig)
 
 	// 5. Plan Module (independiente)
 	planConfig.SetupPlanModule(adminGroup, appDB)
