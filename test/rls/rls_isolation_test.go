@@ -340,6 +340,18 @@ func putJSON(t *testing.T, url, token string, body interface{}, headers map[stri
 	return resp
 }
 
+func del(t *testing.T, url, token string) *http.Response {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodDelete, url, nil)
+	require.NoError(t, err)
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	return resp
+}
+
 func TestRLS_CrossTenantIsolation(t *testing.T) {
 	ts := newTestRLSServer(t)
 	base := ts.Server.URL + "/api/v1"
@@ -460,6 +472,144 @@ func TestRLS_CrossTenantIsolation(t *testing.T) {
 		defer resp.Body.Close()
 		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 	})
+
+	// — Escrituras cross-tenant (criterio T8: "leer NI ESCRIBIR en NINGUNA
+	// tabla RLS"). Arriba está la lectura (GET) y el UPDATE de users; faltaban
+	// el UPDATE de tenants, el DELETE de users y el DELETE de tenants, en las
+	// dos direcciones. Cada negativo se ancla con aserción de no-mutación vía
+	// SuperDB y los positivos propios distinguen "RLS aísla" de "ruta rota
+	// que da 404 universal" — el mismo control que T8c exigió para la lectura.
+
+	t.Run("A puede actualizar su propio tenant", func(t *testing.T) {
+		// Control positivo de PUT /tenants/:id: el 404 cross-tenant de abajo
+		// sólo prueba aislamiento si esta misma ruta responde 200 para A.
+		// ⚠ El use case sólo aplica UpdateDetails cuando llegan name Y
+		// description juntos (update_tenant.go: `req.Name != nil && req.Description
+		// != nil`) — mandar sólo name es un 200 no-op, bug pre-existente fuera
+		// del alcance de T8. Acá se mandan ambos para que el positivo mute.
+		url := fmt.Sprintf("%s/tenants/%s", base, ts.TenantA.String())
+		body := map[string]interface{}{
+			"name":        "Tenant A Renombrado",
+			"description": "Descripción renovada del tenant A",
+		}
+		resp := putJSON(t, url, ts.TokenA, body, nil)
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var nombre string
+		require.NoError(t, ts.SuperDB.QueryRow(
+			`SELECT name FROM tenants WHERE id = $1`, ts.TenantA).Scan(&nombre))
+		assert.Equal(t, "Tenant A Renombrado", nombre,
+			"el control positivo debe mutar de verdad: un 200 sin persistencia no distingue nada")
+	})
+
+	t.Run("A NO puede actualizar el tenant de B", func(t *testing.T) {
+		url := fmt.Sprintf("%s/tenants/%s", base, ts.TenantB.String())
+		body := map[string]interface{}{"name": "Hackeado"}
+		resp := putJSON(t, url, ts.TokenA, body, nil)
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+
+		var nombre string
+		require.NoError(t, ts.SuperDB.QueryRow(
+			`SELECT name FROM tenants WHERE id = $1`, ts.TenantB).Scan(&nombre))
+		assert.Equal(t, "tenant-b", nombre,
+			"el PUT cross-tenant no debe mutar la fila de B")
+	})
+
+	t.Run("A NO puede eliminar el user de B", func(t *testing.T) {
+		url := fmt.Sprintf("%s/users/%s", base, ts.UserB.String())
+		resp := del(t, url, ts.TokenA)
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+
+		var status string
+		require.NoError(t, ts.SuperDB.QueryRow(
+			`SELECT status FROM users WHERE id = $1`, ts.UserB).Scan(&status))
+		assert.Equal(t, "ACTIVE", status,
+			"el DELETE cross-tenant no debe mutar la fila de B")
+	})
+
+	t.Run("A NO puede eliminar el tenant de B", func(t *testing.T) {
+		url := fmt.Sprintf("%s/tenants/%s", base, ts.TenantB.String())
+		resp := del(t, url, ts.TokenA)
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+
+		var status string
+		require.NoError(t, ts.SuperDB.QueryRow(
+			`SELECT status FROM tenants WHERE id = $1`, ts.TenantB).Scan(&status))
+		assert.Equal(t, "ACTIVE", status,
+			"el DELETE cross-tenant no debe mutar la fila de B")
+	})
+
+	// Dirección B→A de las escrituras (T8c: un solo sentido no es evidencia).
+
+	t.Run("B NO puede actualizar el tenant de A", func(t *testing.T) {
+		url := fmt.Sprintf("%s/tenants/%s", base, ts.TenantA.String())
+		body := map[string]interface{}{"name": "Hackeado B"}
+		resp := putJSON(t, url, ts.TokenB, body, nil)
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+
+		var nombre string
+		require.NoError(t, ts.SuperDB.QueryRow(
+			`SELECT name FROM tenants WHERE id = $1`, ts.TenantA).Scan(&nombre))
+		assert.Equal(t, "Tenant A Renombrado", nombre,
+			"el PUT cross-tenant no debe mutar la fila de A")
+	})
+
+	t.Run("B NO puede eliminar el user de A", func(t *testing.T) {
+		url := fmt.Sprintf("%s/users/%s", base, ts.UserA.String())
+		resp := del(t, url, ts.TokenB)
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+
+		var status string
+		require.NoError(t, ts.SuperDB.QueryRow(
+			`SELECT status FROM users WHERE id = $1`, ts.UserA).Scan(&status))
+		assert.Equal(t, "ACTIVE", status,
+			"el DELETE cross-tenant no debe mutar la fila de A")
+	})
+
+	t.Run("B NO puede eliminar el tenant de A", func(t *testing.T) {
+		url := fmt.Sprintf("%s/tenants/%s", base, ts.TenantA.String())
+		resp := del(t, url, ts.TokenB)
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+
+		var status string
+		require.NoError(t, ts.SuperDB.QueryRow(
+			`SELECT status FROM tenants WHERE id = $1`, ts.TenantA).Scan(&status))
+		assert.Equal(t, "ACTIVE", status,
+			"el DELETE cross-tenant no debe mutar la fila de A")
+	})
+
+	t.Run("A puede eliminar un user de su propio tenant", func(t *testing.T) {
+		// Control positivo de DELETE /users/:id: mismo motivo que el positivo
+		// de PUT — sin él, el 404 cross-tenant podría ser una ruta ausente.
+		userExtra := uuid.New()
+		_, err := ts.SuperDB.Exec(`
+			INSERT INTO users (id, email, password_hash, tenant_id, role_id, status, provider, created_at, updated_at)
+			VALUES ($1, 'extra-a@example.com', $2, $3, $4, 'ACTIVE', 'LOCAL', NOW(), NOW())`,
+			userExtra, "$2a$10$yMecfP7H7mT0m9VHNnMFIezB06ihuIqUVpD12sa34UHhSfCRIQdje", ts.TenantA, ts.RoleID)
+		require.NoError(t, err)
+
+		url := fmt.Sprintf("%s/users/%s", base, userExtra.String())
+		resp := del(t, url, ts.TokenA)
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+	})
+
+	t.Run("A puede eliminar su propio tenant", func(t *testing.T) {
+		// Control positivo de DELETE /tenants/:id (soft delete). Va ÚLTIMO:
+		// soft-deletea tenantA, que todos los subtests anteriores usan como
+		// emisor y objetivo.
+		url := fmt.Sprintf("%s/tenants/%s", base, ts.TenantA.String())
+		resp := del(t, url, ts.TokenA)
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+	})
 }
 
 // — Tokens de sesión (refresh_tokens / revoked_tokens): objeción (B) del gate
@@ -570,6 +720,19 @@ func TestRLS_TokensDeSesion(t *testing.T) {
 		resp := postJSON(t, base+"/auth/revoke-all", ts.TokenB, map[string]string{})
 		defer resp.Body.Close()
 		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	})
+
+	t.Run("las revocaciones de B no alcanzan al access token de A (dirección B→A)", func(t *testing.T) {
+		// T8: revoked_tokens cierra sus dos direcciones. B ya dejó dos marcas
+		// en esta corrida (el logout scope='jti' y el JTI sembrado); ninguna
+		// puede tocar la sesión de A: el INSERT de revocación corre bajo RLS
+		// (policy por user_id IN users del tenant, migraciones 019/021) y el
+		// predicado del gate filtra por user_id. La dirección opuesta (el
+		// corte de A no alcanza a B) vive en TestRLS_RevokeAllCortePorUsuario.
+		resp := get(t, base+"/users", ts.TokenA, map[string]string{"X-Tenant-ID": ts.TenantA.String()})
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusOK, resp.StatusCode,
+			"las marcas de revocación de B no deben alcanzar la sesión de A")
 	})
 }
 
