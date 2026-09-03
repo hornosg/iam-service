@@ -282,8 +282,10 @@ func (r *MockAuthRepository) RevokeToken(ctx context.Context, jti uuid.UUID, use
 
 // IsTokenRevoked implementa la interfaz del repositorio. Replica la semántica
 // real del gate (T8i): revocado por JTI o por marca scope='user' con
-// revoked_at > issuedAt (issuedAt=0 → fail-closed, cualquier marca viva
-// revoca).
+// revoked_at > to_timestamp(issuedAt) — comparación de precisión completa
+// contra el segundo truncado del iat, igual que el SQL: un token emitido en
+// el segundo EXACTO del corte queda revocado (issuedAt=0 → fail-closed,
+// cualquier marca viva revoca).
 func (r *MockAuthRepository) IsTokenRevoked(ctx context.Context, jti uuid.UUID, userID uuid.UUID, issuedAt int64) (bool, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -297,7 +299,13 @@ func (r *MockAuthRepository) IsTokenRevoked(ctx context.Context, jti uuid.UUID, 
 	if _, exists := r.revokedTokens[jti]; exists {
 		return true, nil
 	}
-	if cutAt, ok := r.userCuts[userID]; ok && issuedAt < cutAt.Unix() {
+	// Fidelidad al SQL (T8m): el gate real evalúa revoked_at > to_timestamp($3),
+	// donde revoked_at tiene precisión de microsegundos y to_timestamp(iat)
+	// trunca al segundo. El equivalente exacto es comparar el corte completo
+	// contra time.Unix(issuedAt, 0) con After — NO `issuedAt < cutAt.Unix()`,
+	// que deja pasar el segundo exacto del corte y es más permisivo que
+	// producción.
+	if cutAt, ok := r.userCuts[userID]; ok && cutAt.After(time.Unix(issuedAt, 0)) {
 		return true, nil
 	}
 	return false, nil

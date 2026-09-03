@@ -1043,6 +1043,29 @@ func TestRLS_RevokeAllCortePorUsuario(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	})
 
+	t.Run("token emitido en el segundo EXACTO del corte: mismo veredicto que el unit (T8m)", func(t *testing.T) {
+		// Nota 1 del gate L4 de T8i: el SQL es `revoked_at > to_timestamp(iat)`
+		// — revoked_at con µs, iat truncado al segundo — así que un token
+		// emitido en el segundo exacto del corte queda REVOCADO (falso
+		// positivo del mismo segundo, dirección segura, documentado en la
+		// 023). El mock unitario replica ese veredicto desde T8m; este
+		// subtest es el espejo HTTP: mismo token, mismo resultado.
+		// El veredicto esperado se transcribe del predicado del SQL: si la
+		// marca cayera en el borde exacto del segundo (revoked_at ==
+		// to_timestamp(iat)), el > estricto NO revoca — caso de medida nula
+		// que la transcripción vuelve determinista en vez de flaky.
+		tokenSegundoExacto := makeTokenConIat(ts.UserA, ts.TenantA, "admin-a@example.com", corte.Truncate(time.Second))
+		revocado := corte.After(time.Unix(corte.Unix(), 0))
+		esperado := http.StatusOK
+		if revocado {
+			esperado = http.StatusUnauthorized
+		}
+		resp := get(t, base+"/users", tokenSegundoExacto, map[string]string{"X-Tenant-ID": ts.TenantA.String()})
+		defer resp.Body.Close()
+		assert.Equal(t, esperado, resp.StatusCode,
+			"el HTTP debe coincidir con `revoked_at > to_timestamp(iat)` y con el mock unitario")
+	})
+
 	t.Run("el corte de A no alcanza a B (RLS + predicado por user_id)", func(t *testing.T) {
 		resp := get(t, base+"/users", ts.TokenB, map[string]string{"X-Tenant-ID": ts.TenantB.String()})
 		defer resp.Body.Close()
@@ -1092,12 +1115,19 @@ func TestRLS_RevokeAllCortePorUsuario(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	})
 
-	t.Run("el \"Ojo\" de la tarea: el índice cubre el predicado nuevo del gate", func(t *testing.T) {
+	t.Run("el \"Ojo\" de la tarea: con volumen real el planner elige el índice por sí solo", func(t *testing.T) {
 		// El gate pasa a evaluar un predicado por user_id en CADA request. El
 		// plan debe usar los índices (pkey para jti, idx_revoked_tokens_user_scope
-		// parcial para la marca de usuario), no un Seq Scan. enable_seqscan=off
-		// fuerza la visibilidad del camino por índice en una tabla de prueba
-		// con pocas filas, donde el planner elegiría seq scan por costo.
+		// parcial para la marca de usuario), no un Seq Scan.
+		//
+		// T8m (nota 4 del gate L4 de T8i): la evidencia anterior desactivaba
+		// el seq scan a mano, lo que prueba que el índice ES utilizable pero
+		// no que el planner lo ELIGE — en una tabla de pocas filas el seq scan
+		// es la elección correcta y forzar el plan es medir el planner de un
+		// lab que no existe. Acá se siembra volumen real (user_id aleatorios,
+		// sólo las filas de A matchean el predicado) dentro de la misma tx —
+		// el rollback la deshace y el EXPLAIN corre con el planner en su
+		// configuración por defecto.
 		var existeIndice int
 		require.NoError(t, ts.SuperDB.QueryRow(
 			`SELECT COUNT(*) FROM pg_indexes WHERE indexname = 'idx_revoked_tokens_user_scope'`).
@@ -1114,7 +1144,13 @@ func TestRLS_RevokeAllCortePorUsuario(t *testing.T) {
 		tx, err := ts.SuperDB.BeginTx(ctx, nil)
 		require.NoError(t, err)
 		defer tx.Rollback()
-		_, err = tx.Exec("SET LOCAL enable_seqscan = off")
+		// Volumen: 30000 marcas scope='user' de user_id aleatorios. El
+		// predicado del gate (user_id = A) es selectivo (≈1 de 30000) — la
+		// condición bajo la que el índice partial es el camino barato.
+		_, err = tx.Exec(`
+			INSERT INTO revoked_tokens (jti, user_id, expires_at, scope, revoked_at)
+			SELECT gen_random_uuid(), gen_random_uuid(), now() + interval '15 minutes', 'user', now()
+			FROM generate_series(1, 30000)`)
 		require.NoError(t, err)
 
 		rows, err := tx.Query(`
@@ -1133,7 +1169,9 @@ func TestRLS_RevokeAllCortePorUsuario(t *testing.T) {
 		}
 		require.NoError(t, rows.Err())
 
-		assert.Contains(t, plan, "BitmapOr", "el OR del gate debe resolverse por índices:\n%s", plan)
-		assert.Contains(t, plan, "idx_revoked_tokens_user_scope", "la marca de usuario debe resolverse por el índice parcial:\n%s", plan)
+		assert.Contains(t, plan, "idx_revoked_tokens_user_scope",
+			"con volumen real la marca de usuario debe resolverse por el índice parcial (elección del planner, no forzada):\n%s", plan)
+		assert.NotContains(t, plan, "Seq Scan on revoked_tokens",
+			"el planner no debe caer a Seq Scan con volumen real:\n%s", plan)
 	})
 }
