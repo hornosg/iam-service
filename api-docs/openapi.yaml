@@ -2,7 +2,32 @@ openapi: 3.1.0
 info:
   title: Multi-Tenant IAM API
   version: 1.0.0
-  description: API para gestión de identidad y acceso multi-tenant
+  description: |
+    API para gestión de identidad y acceso multi-tenant.
+
+    ## Contrato de revocación de tokens (ex-consumidores de `/auth/validate`)
+
+    `GET /auth/validate` fue **eliminado** (ACC-E02 T8k, decisión del owner
+    2026-09-02): no tenía consumidores productivos y respondía `200 valid:true`
+    para tokens **revocados**. Este contrato reemplaza la pregunta
+    "¿este token sigue vivo?" para quien antes la hacía contra ese endpoint:
+
+    1. **Firma y vigencia** — válidalas localmente con el secreto compartido
+       (HS256), como ya hace cada servicio del lab; no hace falta un
+       round-trip por request. Kong además verifica firma y `exp` en el borde
+       (plugin `jwt`, `iss=iam-service`) para toda ruta `/iam/`.
+    2. **Revocación** — no hay endpoint de introspección: la aplica el gate de
+       revocación de este servicio en cada request post-auth. `POST /auth/logout`
+       y `POST /auth/revoke-all` marcan la revocación (`revoked_tokens`); todo
+       endpoint bajo `/api/v1` distinto de login/refresh consulta esa marca y
+       responde **401** si el token está revocado o vencido. La forma concreta
+       de saber si un token sigue vivo es **usarlo contra el endpoint del
+       recurso**: un token revocado recibe 401 del propio servicio, detrás de
+       la verificación de firma de Kong.
+    3. Si un consumidor necesita introspección con revocación-awareness
+       explícita (p. ej. tras migrar a JWKS en ACC-E03), es una decisión de
+       diseño nueva del owner — no se reintroduce un endpoint como el
+       eliminado, que validaba firma sin consultar revocación.
 
 servers:
   - url: /iam/api/v1
