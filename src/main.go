@@ -54,7 +54,9 @@ func main() {
 	// NUNCA debe correr como superuser/BYPASSRLS. FORCE ROW LEVEL SECURITY no aplica a superusers →
 	// con un rol privilegiado la RLS de users, tenants, refresh_tokens y revoked_tokens queda inerte:
 	// el servicio serviría datos cross-tenant sin error visible. Se verifica en AMBOS pools (T1-D2:
-	// dos pools reales, appDB con account_app y loginDB con iam_login; ambos deben ser NOBYPASSRLS).
+	// dos pools reales, appDB con account_app y loginDB con iam_login; ambos deben ser NOBYPASSRLS)
+	// y, desde T8n, también sobre la conexión de migraciones (account_migrator): el conteo de
+	// guards es el de conexiones abiertas.
 	if err := assertNoRLSBypass(appDB); err != nil {
 		log.Fatalf("%v", err)
 	}
@@ -63,10 +65,31 @@ func main() {
 	}
 
 	// Migraciones versionadas in-app (ADR-001) — fail-fast antes de servir tráfico.
-	// Corren sobre el rol de aplicación; las migraciones 017/018/019 son idempotentes.
+	// ACC-E02 T8n: corren con el rol dedicado account_migrator (DDL sobre iam_db, SIN
+	// uso en runtime), en una conexión propia que se cierra al terminar de migrar —
+	// NO sobre el pool de aplicación: account_app sólo tiene SELECT sobre
+	// schema_migrations (rol de menor privilegio, correcto para runtime), así que
+	// todo arranque con una migración pendiente fallaba con permission denied y el
+	// workaround era el baile de dos arranques con DB_USER=postgres +
+	// ALLOW_SUPERUSER_DB=true. Bootstrap del rol: scripts/bootstrap_migrator.sh.
+	migrateDB, err := setupMigratorDatabase()
+	if err != nil {
+		log.Fatalf("Error connecting migration role: %v", err)
+	}
+	// El guard de T6 no se relaja con el tercer rol: tercera conexión abierta →
+	// tercer guard. Un rol SUPERUSER/BYPASSRLS en DB_MIGRATE_USER migraría con la
+	// RLS inerte y se rechaza igual que en runtime.
+	if err := assertNoRLSBypass(migrateDB); err != nil {
+		log.Fatalf("%v", err)
+	}
 	dbName := env.Get("DB_NAME", "iam_db")
-	if err := sharedmigrate.RunMigrations(appDB, iamroot.MigrationsFS, dbName); err != nil {
+	if err := sharedmigrate.RunMigrations(migrateDB, iamroot.MigrationsFS, dbName); err != nil {
 		log.Fatalf("Error running migrations: %v", err)
+	}
+	// Cerrada al terminar de migrar (decisión del owner, T8n): no es un pool de
+	// servicio y jamás corre queries de negocio.
+	if err := migrateDB.Close(); err != nil {
+		log.Printf("cierre de la conexión de migraciones: %v", err)
 	}
 
 	// Configuración del router
@@ -284,12 +307,43 @@ func setupDatabases() (appDB *sql.DB, loginDB *sql.DB, err error) {
 	return appDB, loginDB, nil
 }
 
+// setupMigratorDatabase abre la conexión dedicada de migraciones (ACC-E02 T8n): rol
+// account_migrator con privilegio de DDL sobre iam_db y SIN uso en runtime. Es una
+// conexión, no un pool de servicio: no lleva monitor de métricas (viviría lo que
+// dura el boot) y se cierra en main() apenas termina RunMigrations. La credencial
+// sale de DB_MIGRATE_USER / DB_MIGRATE_PASSWORD y NO comparte secreto con los otros
+// roles — misma decisión de T5: una credencial comprometida no entrega las demás.
+func setupMigratorDatabase() (*sql.DB, error) {
+	host := env.Get("DB_HOST", "localhost")
+	port := env.Get("DB_PORT", "5432")
+	migrateUser := env.Get("DB_MIGRATE_USER", "account_migrator")
+	migratePassword := env.Get("DB_MIGRATE_PASSWORD", "lab_account_migrator")
+	dbname := env.Get("DB_NAME", "iam_db")
+	sslmode := env.Get("DB_SSLMODE", "disable")
+
+	db, err := postgres.Connect(postgres.Config{
+		Host:     host,
+		Port:     port,
+		User:     migrateUser,
+		Password: migratePassword,
+		DBName:   dbname,
+		SSLMode:  sslmode,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("connect %s: %w", migrateUser, err)
+	}
+
+	log.Printf("Successfully connected to database as migrator=%s", migrateUser)
+	return db, nil
+}
+
 // assertNoRLSBypass aborta el arranque si el rol de base de datos con el que conectamos es
 // superuser o tiene el atributo BYPASSRLS (ACC-E02 T6, patrón PLAT-E29 T7 / RULE-09/RULE-10).
 // Con un rol así, FORCE ROW LEVEL SECURITY no se aplica y la RLS de users, tenants,
 // refresh_tokens y revoked_tokens queda inerte: el servicio serviría datos cross-tenant sin
 // ningún error visible. Convierte ese fail-OPEN silencioso en fail-CLOSED ruidoso. Se corre en
-// AMBAS conexiones (account_app e iam_login) por el modelo de dos pools de T1-D2.
+// TODAS las conexiones que abre el servicio (account_app, iam_login y, desde T8n, account_migrator)
+// por el modelo de pools de T1-D2: el conteo de llamadas = conexiones abiertas.
 // ALLOW_SUPERUSER_DB=true es un escape hatch explícito para tareas admin locales — jamás debe
 // usarse en producción.
 func assertNoRLSBypass(db *sql.DB) error {

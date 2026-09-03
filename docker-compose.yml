@@ -1,7 +1,7 @@
 services:
   postgres-setup:
     image: pgvector/pgvector:pg15
-    container_name: iam-postgres-setup
+    container_name: account-postgres-setup
     environment:
       PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
     command: >
@@ -12,46 +12,90 @@ services:
     networks:
       - lab-network
 
-  iam-service:
+  # ============================================================================================
+  # account-service — sucede a iam-service (PLAT-PROP-013). ESTE archivo es la fuente de verdad
+  # del servicio desde el cutover de ACC-E02 (2026-09-03).
+  #
+  # ORIGEN DE ESTE BLOQUE: es el de `active/mercado-cercano/docker-compose.yml`, que era el que
+  # realmente corría, más las credenciales de los dos pools que sólo existían acá. Se hizo en esa
+  # dirección a propósito: el de MC tenía cosas que éste no —`S2S_API_KEY`, `SERVICE_NAMESPACE`,
+  # `user: root`, healthcheck, `restart`— y levantar sin ellas habría roto las llamadas
+  # servicio-a-servicio de onboarding/sales/pim el mismo día del cutover.
+  # El bloque de MC quedó desactivado; no puede haber dos definiciones del mismo servicio.
+  # ============================================================================================
+  account-service:
     build:
       context: .
       dockerfile: Dockerfile
       target: development
-    container_name: iam-service
+    container_name: account-service
     environment:
       DB_HOST: lab-postgres
       DB_PORT: 5432
-      # ACC-E02 T5: dos credenciales DISTINTAS, no dos usuarios con el mismo
-      # password. Si compartieran secreto, comprometer la credencial pre-auth
-      # (iam_login, la superficie expuesta al mundo) entregaría account_app y
-      # el split de roles no aislaría nada.
-      # Los defaults son de LAB. En prod se overridean por env (pendiente de
-      # definir dónde viven: no van en este archivo).
+      # EL CUTOVER DE ACC-E02. Hasta el 2026-09-03 este servicio se conectaba como `postgres`
+      # —superusuario, que **bypasea RLS por definición**— así que toda la RLS de la épica no
+      # protegía nada en runtime. Acá se corta.
+      #
+      # T5: dos credenciales DISTINTAS, no dos usuarios con el mismo password. Si compartieran
+      # secreto, comprometer la credencial pre-auth (`iam_login`, la superficie expuesta al mundo)
+      # entregaría `account_app` y el split de roles no aislaría nada.
+      # Los defaults son de LAB. En prod se overridean por env.
       DB_USER: account_app
       DB_PASSWORD: ${IAM_APP_DB_PASSWORD:-lab_account_app}
       DB_LOGIN_USER: iam_login
       DB_LOGIN_PASSWORD: ${IAM_LOGIN_DB_PASSWORD:-lab_iam_login}
+      # T8n: rol de migraciones — DDL sobre iam_db, SIN uso en runtime. RunMigrations
+      # abre su propia conexión con esta credencial y la cierra al migrar. El bootstrap
+      # one-shot del rol es scripts/bootstrap_migrator.sh (la 024 se aplica una vez con
+      # un rol que ya pueda crear roles; nunca estampar schema_migrations a mano).
+      # Default de LAB; mismo criterio de T5: secreto distinto de los otros dos roles.
+      DB_MIGRATE_USER: account_migrator
+      DB_MIGRATE_PASSWORD: ${IAM_MIGRATE_DB_PASSWORD:-lab_account_migrator}
       DB_NAME: iam_db
       DB_SSLMODE: disable
       GIN_MODE: debug
       LOG_LEVEL: debug
       JWT_SECRET: ${JWT_SECRET:-dev-secret-key-change-me-in-production-min-32-chars}
+      SERVICE_NAMESPACE: ${SERVICE_NAMESPACE:-mc}
+      # Secreto S2S compartido: el gate Authorize lo valida para autorizar llamadas de servicios
+      # internos (onboarding/sales/pim) a /tenants, /users, /roles, /plans.
+      S2S_API_KEY: ${S2S_API_KEY:-s2s-internal}
       PORT: 8080
     ports:
       - "8080:8080"
     volumes:
       - .:/app
-      - iam_go_mod_cache:/go/pkg/mod
+      - account_go_mod_cache:/go/pkg/mod
+    # El bind mount de arriba trae el ownership del host (uid 1000), no el de `appuser` fijado en
+    # build-time por el Dockerfile — sin esto, air no puede ni crear /app/tmp.
+    user: root
     depends_on:
       - postgres-setup
     networks:
-      - lab-network
+      lab-network:
+        aliases:
+          # ALIAS TEMPORAL, se retira en ACC-E07. Kong lo referencia 4 veces (incluidas las rutas
+          # de login y refresh), y también pim-service, catalog-bff y el scrape de Prometheus.
+          # Renombrar el contenedor sin este alias tumba la autenticación de TODO el lab hasta que
+          # se reconstruya Kong — y Kong necesita rebuild + recreate, no un restart
+          # (`docker compose -f infra/docker-compose.yml up -d --build kong`).
+          # Con el alias, los dos nombres resuelven y el rename no tiene ventana de caída.
+          - mc-iam-service
+    restart: unless-stopped
+    healthcheck:
+      # wget --spider manda HEAD; la ruta /health sólo está registrada como GET en Gin y devuelve
+      # 404 a HEAD (falso "unhealthy").
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     labels:
       - "logging=promtail"
-      - "service_name=iam-service"
+      - "service_name=account-service"
 
 volumes:
-  iam_go_mod_cache:
+  account_go_mod_cache:
     driver: local
 
 networks:

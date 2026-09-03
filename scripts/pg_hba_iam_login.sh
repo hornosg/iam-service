@@ -1,20 +1,26 @@
 #!/usr/bin/env bash
-# pg_hba_iam_login.sh — T1-D4 (ACC-E02 T2): blast-radius control del rol iam_login
+# pg_hba_iam_login.sh — T1-D4 (ACC-E02 T2) + T8n: blast-radius control de los roles
+# sensibles de iam_db (iam_login y account_migrator)
 #
 # iam_login lee password_hash de TODOS los usuarios sin filtro de tenant (por diseño,
-# ver migrations/017). Este script acota desde DÓNDE se puede usar ese rol: sólo la red
-# de iam-service (lab-network). Cualquier otro origen se rechaza. Es defensa en profundidad
-# sobre el password (que se fija out-of-band, nunca versionado): si las credenciales de DB
-# leak, igual no se pueden usar desde fuera del lab.
+# ver migrations/017). account_migrator (T8n) tiene DDL sobre TODA la base: puede
+# dropear policies y desactivar FORCE RLS, un poder comparable sobre el aislamiento.
+# Este script acota desde DÓNDE se pueden usar esos roles: sólo la red de iam-service
+# (lab-network). Cualquier otro origen se rechaza. Es defensa en profundidad sobre el
+# password (que se fija out-of-band, nunca versionado): si las credenciales de DB leak,
+# igual no se pueden usar desde fuera del lab.
 #
-# Idempotente: reescribe el bloque marcado en cada corrida (no duplica líneas).
+# Idempotente: reescribe el bloque marcado en cada corrida (no duplica líneas). Los
+# MARK_BEGIN/MARK_END son los originales de T2 a propósito: son la clave con la que
+# el bloque vivo se reconoce y reemplaza entero; cambiarlos dejaría el bloque viejo
+# duplicado en el pg_hba del lab.
 # Sin restart: sólo pg_reload_conf() — las conexiones existentes no se ven afectadas.
-# Aditivo: las reglas sólo afectan al rol iam_login sobre iam_db; todo lo demás cae al
+# Aditivo: las reglas sólo afectan a esos roles sobre iam_db; todo lo demás cae al
 # catch-all existente. No rompe otros servicios del lab.
 #
 # Orden de pg_hba = first-match, por eso las reglas van ANTES del catch-all
 # (`host all all all scram-sha-256`): sin la línea reject, el catch-all dejaría pasar
-# a iam_login desde cualquier host.
+# a esos roles desde cualquier host.
 #
 # Producción (k3s): el equivalente es un NetworkPolicy + host allowlist; este script es
 # el control del lab (lab-postgres). Re-aplicar tras recrear el volumen de lab-postgres.
@@ -53,12 +59,17 @@ awk -v allow="$ALLOW" -v begin="$BEGIN" -v end="$END" '
   # insertar el bloque antes del catch-all `host all all all ...`
   $0 ~ /^host[[:space:]]+all[[:space:]]+all[[:space:]]+all[[:space:]]+/ && !done {
     print begin
-    print "# iam_login lee password_hash de TODOS los usuarios sin filtro de tenant (por diseno)."
-    print "# Acota el blast radius: solo la red de iam-service (lab-network) puede usarlo;"
-    print "# el resto se rechaza. Password out-of-band (no versionado). Prod (k3s): NetworkPolicy."
+    print "# iam_login lee password_hash de TODOS los usuarios sin filtro de tenant (por diseno);"
+    print "# account_migrator (T8n) tiene DDL sobre toda la base: puede dropear policies y"
+    print "# desactivar FORCE RLS. Acota el blast radius de ambos: solo la red de iam-service"
+    print "# (lab-network) puede usarlos; el resto se rechaza. Password out-of-band (no"
+    print "# versionado). Prod (k3s): NetworkPolicy."
     print "host iam_db iam_login " allow " scram-sha-256"
     print "host iam_db iam_login 0.0.0.0/0 reject"
     print "host iam_db iam_login ::/0 reject"
+    print "host iam_db account_migrator " allow " scram-sha-256"
+    print "host iam_db account_migrator 0.0.0.0/0 reject"
+    print "host iam_db account_migrator ::/0 reject"
     print end
     done=1
   }
@@ -77,9 +88,9 @@ docker exec "$CONTAINER" psql -U "$ADMIN_USER" -d postgres -tAc \
 echo "pg_hba recargado para '$CONTAINER'."
 
 # Verificar que las reglas quedaron cargadas.
-echo "--- reglas iam_login activas (pg_hba_file_rules) ---"
+echo "--- reglas blast-radius activas (pg_hba_file_rules) ---"
 docker exec "$CONTAINER" psql -U "$ADMIN_USER" -d postgres -c \
   "SELECT type, database, user_name, address, auth_method
      FROM pg_hba_file_rules
-    WHERE user_name = '{iam_login}'
+    WHERE user_name IN ('{iam_login}', '{account_migrator}')
     ORDER BY line_number;"
