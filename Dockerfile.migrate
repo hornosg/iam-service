@@ -11,6 +11,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY migrations /migrations
 COPY scripts /scripts
-COPY src/tenant /src/tenant
+COPY src/tenancy /src/tenancy
 
 WORKDIR /

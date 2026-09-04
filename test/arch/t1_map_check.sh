@@ -204,6 +204,19 @@ main() {
         exit 2
     fi
 
+    # Guard post-T4 (ACC-E01.T4, 2026-09-04): este check valida la biyección
+    # mapa↔árbol PRE-mudanza (las filas listan paths viejos: src/auth, src/plan,
+    # ...). Tras ejecutado el mapa, src/auth ya no existe y el check no tiene
+    # sujeto. No es un FAIL: el mapa se ejecutó exactamente como estaba escrito.
+    # El sucesor de este check post-mudanza es el test de arquitectura de T6
+    # (fronteras entre módulos). Sigue corriendo completo en árboles pre-T4
+    # (worktrees/branches históricas).
+    if [[ ! -d "$REPO_ROOT/src/auth" ]]; then
+        echo "SKIP ACC-E01.T1: el árbol ya está post-mudanza (T4 ejecutó el mapa;"
+        echo "src/auth no existe). Sucesor: test de arquitectura de T6."
+        exit 0
+    fi
+
     echo "== ACC-E01.T1 — mapa de reorganización (confirmado) vs árbol vivo =="
     echo "épica: $EPIC_FILE"
     local -i rc_map=0 rc_neg=0
