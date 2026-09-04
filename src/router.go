@@ -23,16 +23,16 @@ import (
 	sharedlog "github.com/hornosg/go-shared/infrastructure/logging"
 	sharedmetrics "github.com/hornosg/go-shared/infrastructure/metrics"
 
-	"iam/src/auth/infrastructure/adapter"
-	"iam/src/auth/infrastructure/config"
-	authmw "iam/src/auth/infrastructure/middleware"
-	"iam/src/auth/infrastructure/s2s"
-	planConfig "iam/src/plan/infrastructure/config"
-	roleConfig "iam/src/role/infrastructure/config"
-	tenantConfig "iam/src/tenant/infrastructure/config"
-	userConfig "iam/src/user/infrastructure/config"
-	userRepo "iam/src/user/infrastructure/persistence/repository"
-	userUC "iam/src/user/application/usecase"
+	"iam/src/identity/infrastructure/adapter"
+	"iam/src/identity/infrastructure/config"
+	authmw "iam/src/access/infrastructure/middleware"
+	"iam/src/access/infrastructure/s2s"
+	planConfig "iam/src/plans/infrastructure/config"
+	roleConfig "iam/src/access/infrastructure/config"
+	tenantConfig "iam/src/tenancy/infrastructure/config"
+	userConfig "iam/src/identity/infrastructure/config"
+	userRepo "iam/src/identity/infrastructure/persistence/repository"
+	userUC "iam/src/identity/application/usecase"
 )
 
 func buildRouter(appDB *sql.DB, loginDB *sql.DB) *gin.Engine {

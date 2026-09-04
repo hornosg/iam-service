@@ -48,7 +48,7 @@ import (
 
 	"iam"
 
-	"iam/src/auth/infrastructure/persistence/repository"
+	"iam/src/identity/infrastructure/persistence/repository"
 
 	sharedmigrate "github.com/hornosg/go-shared/migrate"
 

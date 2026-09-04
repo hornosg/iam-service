@@ -99,7 +99,7 @@ func modulePrefix(t *testing.T) string {
 }
 
 // hasSegment dice si un import path tiene un segmento exacto (no subcadena).
-// "iam/src/user/domain/port" -> hasSegment("port")=true, hasSegment("domain")=true.
+// "iam/src/identity/domain/port" -> hasSegment("port")=true, hasSegment("domain")=true.
 func hasSegment(path, seg string) bool {
 	for _, s := range strings.Split(path, "/") {
 		if s == seg {

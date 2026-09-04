@@ -20,12 +20,12 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 
 	sharedport "github.com/hornosg/go-shared/domain/port"
-	authmw "iam/src/auth/infrastructure/middleware"
-	"iam/src/auth/infrastructure/s2s"
-	planConfig "iam/src/plan/infrastructure/config"
-	roleConfig "iam/src/role/infrastructure/config"
+	authmw "iam/src/access/infrastructure/middleware"
+	"iam/src/access/infrastructure/s2s"
+	planConfig "iam/src/plans/infrastructure/config"
+	roleConfig "iam/src/access/infrastructure/config"
 	"iam/src/shared/validator"
-	tenantConfig "iam/src/tenant/infrastructure/config"
+	tenantConfig "iam/src/tenancy/infrastructure/config"
 )
 
 // defaultIntegrationPolicy y las claves S2S viven en s2s_auth_test.go (mismo

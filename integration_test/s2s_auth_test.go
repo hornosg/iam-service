@@ -25,13 +25,13 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	authmw "iam/src/auth/infrastructure/middleware"
-	"iam/src/auth/infrastructure/s2s"
-	planConfig "iam/src/plan/infrastructure/config"
-	roleConfig "iam/src/role/infrastructure/config"
+	authmw "iam/src/access/infrastructure/middleware"
+	"iam/src/access/infrastructure/s2s"
+	planConfig "iam/src/plans/infrastructure/config"
+	roleConfig "iam/src/access/infrastructure/config"
 	"iam/src/shared/validator"
-	tenantConfig "iam/src/tenant/infrastructure/config"
-	userConfig "iam/src/user/infrastructure/config"
+	tenantConfig "iam/src/tenancy/infrastructure/config"
+	userConfig "iam/src/identity/infrastructure/config"
 )
 
 const (
