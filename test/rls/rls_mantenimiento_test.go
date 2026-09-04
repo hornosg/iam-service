@@ -51,6 +51,8 @@ import (
 	"iam/src/auth/infrastructure/persistence/repository"
 
 	sharedmigrate "github.com/hornosg/go-shared/migrate"
+
+	sharedpostgres "iam/src/shared/postgres"
 )
 
 // TestRLS_MantenimientoRevocaciones verifica el escape de mantenimiento contra
@@ -101,7 +103,7 @@ func TestRLS_MantenimientoRevocaciones(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, appDB.PingContext(ctx))
 	t.Cleanup(func() { _ = appDB.Close() })
-	require.NoError(t, assertNoRLSBypass(appDB), "account_app debe ser NOBYPASSRLS")
+	require.NoError(t, sharedpostgres.AssertNoRLSBypass(appDB), "account_app debe ser NOBYPASSRLS")
 
 	// Semilla: dos tenants, un admin cada uno, y revocaciones vencidas y vivas
 	// en ambos tenants. Superuser inserta (bypass RLS): replica lo que hace la

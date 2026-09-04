@@ -21,6 +21,7 @@ import (
 	roleConfig "iam/src/role/infrastructure/config"
 	tenantConfig "iam/src/tenant/infrastructure/config"
 	userConfig "iam/src/user/infrastructure/config"
+	sharedpostgres "iam/src/shared/postgres"
 	"iam/src/shared/validator"
 	userRepo "iam/src/user/infrastructure/persistence/repository"
 	userUC "iam/src/user/application/usecase"
@@ -57,10 +58,10 @@ func main() {
 	// dos pools reales, appDB con account_app y loginDB con iam_login; ambos deben ser NOBYPASSRLS)
 	// y, desde T8n, también sobre la conexión de migraciones (account_migrator): el conteo de
 	// guards es el de conexiones abiertas.
-	if err := assertNoRLSBypass(appDB); err != nil {
+	if err := sharedpostgres.AssertNoRLSBypass(appDB); err != nil {
 		log.Fatalf("%v", err)
 	}
-	if err := assertNoRLSBypass(loginDB); err != nil {
+	if err := sharedpostgres.AssertNoRLSBypass(loginDB); err != nil {
 		log.Fatalf("%v", err)
 	}
 
@@ -79,7 +80,7 @@ func main() {
 	// El guard de T6 no se relaja con el tercer rol: tercera conexión abierta →
 	// tercer guard. Un rol SUPERUSER/BYPASSRLS en DB_MIGRATE_USER migraría con la
 	// RLS inerte y se rechaza igual que en runtime.
-	if err := assertNoRLSBypass(migrateDB); err != nil {
+	if err := sharedpostgres.AssertNoRLSBypass(migrateDB); err != nil {
 		log.Fatalf("%v", err)
 	}
 	dbName := env.Get("DB_NAME", "iam_db")
@@ -337,34 +338,3 @@ func setupMigratorDatabase() (*sql.DB, error) {
 	return db, nil
 }
 
-// assertNoRLSBypass aborta el arranque si el rol de base de datos con el que conectamos es
-// superuser o tiene el atributo BYPASSRLS (ACC-E02 T6, patrón PLAT-E29 T7 / RULE-09/RULE-10).
-// Con un rol así, FORCE ROW LEVEL SECURITY no se aplica y la RLS de users, tenants,
-// refresh_tokens y revoked_tokens queda inerte: el servicio serviría datos cross-tenant sin
-// ningún error visible. Convierte ese fail-OPEN silencioso en fail-CLOSED ruidoso. Se corre en
-// TODAS las conexiones que abre el servicio (account_app, iam_login y, desde T8n, account_migrator)
-// por el modelo de pools de T1-D2: el conteo de llamadas = conexiones abiertas.
-// ALLOW_SUPERUSER_DB=true es un escape hatch explícito para tareas admin locales — jamás debe
-// usarse en producción.
-func assertNoRLSBypass(db *sql.DB) error {
-	if env.Get("ALLOW_SUPERUSER_DB", "false") == "true" {
-		log.Println("⚠️  ALLOW_SUPERUSER_DB=true — se omite el chequeo NOBYPASSRLS (solo admin/local, NUNCA prod)")
-		return nil
-	}
-
-	var privileged bool
-	if err := db.QueryRow(
-		`SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = current_user`,
-	).Scan(&privileged); err != nil {
-		return fmt.Errorf("no se pudo verificar los privilegios del rol de DB (current_user): %w", err)
-	}
-	if privileged {
-		return fmt.Errorf("negativa a arrancar: el rol de DB actual es SUPERUSER o BYPASSRLS y " +
-			"eludiría la row-level security de users/tenants/refresh_tokens/revoked_tokens " +
-			"(ACC-E02 T6, RULE-09/RULE-10). Usá un rol NOBYPASSRLS como account_app/iam_login, " +
-			"o exportá ALLOW_SUPERUSER_DB=true solo para tareas admin locales")
-	}
-
-	log.Println("RLS guard OK: el rol de DB es NOBYPASSRLS (users, tenants, refresh_tokens y revoked_tokens protegidas por FORCE ROW LEVEL SECURITY)")
-	return nil
-}

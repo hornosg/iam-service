@@ -32,6 +32,11 @@ services:
     environment:
       DB_HOST: lab-postgres
       DB_PORT: 5432
+      # T8o: marcador explícito de entorno. La escotilla ALLOW_SUPERUSER_DB sólo
+      # funciona con ENVIRONMENT ∈ {local, lab, test}; con cualquier otro valor (o
+      # sin setear) el guard de arranque se niega a bootear si la escotilla está
+      # puesta — hasta T8o la separaba de producción sólo un comentario.
+      ENVIRONMENT: ${ENVIRONMENT:-lab}
       # EL CUTOVER DE ACC-E02. Hasta el 2026-09-03 este servicio se conectaba como `postgres`
       # —superusuario, que **bypasea RLS por definición**— así que toda la RLS de la épica no
       # protegía nada en runtime. Acá se corta.

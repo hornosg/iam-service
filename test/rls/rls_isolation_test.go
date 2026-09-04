@@ -61,6 +61,8 @@ import (
 
 	sharedport "github.com/hornosg/go-shared/domain/port"
 	sharedmigrate "github.com/hornosg/go-shared/migrate"
+
+	sharedpostgres "iam/src/shared/postgres"
 )
 
 const (
@@ -143,8 +145,8 @@ func newTestRLSServer(t *testing.T) *testRLSServer {
 	require.NoError(t, loginDB.PingContext(ctx))
 
 	// Verificar que ambos pools corren bajo roles NOBYPASSRLS (T6).
-	require.NoError(t, assertNoRLSBypass(appDB), "account_app debe ser NOBYPASSRLS")
-	require.NoError(t, assertNoRLSBypass(loginDB), "iam_login debe ser NOBYPASSRLS")
+	require.NoError(t, sharedpostgres.AssertNoRLSBypass(appDB), "account_app debe ser NOBYPASSRLS")
+	require.NoError(t, sharedpostgres.AssertNoRLSBypass(loginDB), "iam_login debe ser NOBYPASSRLS")
 
 	// Semilla: dos tenants + un admin de tenant_admin en cada uno.
 	tenantA := uuid.New()
@@ -235,19 +237,6 @@ func withCredentials(connStr, user, password string) (string, error) {
 	}
 	u.User = url.UserPassword(user, password)
 	return u.String(), nil
-}
-
-func assertNoRLSBypass(db *sql.DB) error {
-	var privileged bool
-	if err := db.QueryRow(
-		`SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = current_user`,
-	).Scan(&privileged); err != nil {
-		return fmt.Errorf("no se pudo verificar los privilegios del rol de DB (current_user): %w", err)
-	}
-	if privileged {
-		return fmt.Errorf("negativa a arrancar: el rol de DB actual es SUPERUSER o BYPASSRLS y eludiría la row-level security")
-	}
-	return nil
 }
 
 func queryTenantAdminRoleID(t *testing.T, db *sql.DB) uuid.UUID {
