@@ -2,7 +2,9 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -58,6 +60,29 @@ func registeredRoutes(t *testing.T) []string {
 	return out
 }
 
+// routeDiff compara las rutas registradas contra el golden y devuelve la lista
+// de discrepancias; vacía = el contrato se cumple. Vive acá para que
+// TestRoutesGolden y los casos negativos ejerciten LA MISMA lógica de
+// comparación — un negativo contra una copia probaría la copia, no el control.
+func routeDiff(got, want []string) []string {
+	var diffs []string
+	if len(got) != len(want) {
+		diffs = append(diffs, fmt.Sprintf("cantidad de rutas: obtenidas %d, golden %d", len(got), len(want)))
+	}
+	for i := 0; i < len(got) && i < len(want); i++ {
+		if got[i] != want[i] {
+			diffs = append(diffs, fmt.Sprintf("ruta[%d]: obtenida %q, golden %q", i, got[i], want[i]))
+		}
+	}
+	if len(got) > len(want) {
+		diffs = append(diffs, "rutas nuevas no presentes en el golden:\n  "+strings.Join(got[len(want):], "\n  "))
+	}
+	if len(want) > len(got) {
+		diffs = append(diffs, "rutas del golden que ya no se registran:\n  "+strings.Join(want[len(got):], "\n  "))
+	}
+	return diffs
+}
+
 func TestRoutesGolden(t *testing.T) {
 	// PROMETHEUS_ENABLED=true es la configuración desplegada del lab
 	// (.env.example) y registra el set completo de rutas, incluido /metrics.
@@ -84,18 +109,60 @@ func TestRoutesGolden(t *testing.T) {
 	}
 	want := strings.Split(strings.TrimRight(string(raw), "\n"), "\n")
 
-	if len(got) != len(want) {
-		t.Errorf("cantidad de rutas: obtenidas %d, golden %d", len(got), len(want))
+	for _, d := range routeDiff(got, want) {
+		t.Error(d)
 	}
-	for i := 0; i < len(got) && i < len(want); i++ {
-		if got[i] != want[i] {
-			t.Errorf("ruta[%d]: obtenida %q, golden %q", i, got[i], want[i])
-		}
+}
+
+// TestRoutesGoldenDetectaCorrupcion — negativa del contrato de T8, hecha
+// ejecutable: si la comparación deja de detectar cualquiera de estas
+// corrupciones del golden, una mudanza que pierda o cambie una ruta pasa en
+// silencio. La demostración a mano del implementador probó que falló UNA VEZ;
+// este test la regresa en cada corrida (misma doctrina que T6 para arch tests).
+func TestRoutesGoldenDetectaCorrupcion(t *testing.T) {
+	got := []string{
+		"GET /api/v1/users",
+		"POST /api/v1/auth/login",
+		"DELETE /api/v1/roles/:id",
 	}
-	if len(got) > len(want) {
-		t.Errorf("rutas nuevas no presentes en el golden:\n  %s", strings.Join(got[len(want):], "\n  "))
+	cases := []struct {
+		name       string
+		want       []string
+		quieroDiff bool // true: la corrupción DEBE detectarse; false: control sano
+	}{
+		{"ruta quitada del golden", got[:2], true},
+		{"ruta nueva que el golden no registra", append(append([]string{}, got...), "PATCH /api/v1/tenants/:id/features"), true},
+		{"metodo cambiado", []string{"GET /api/v1/users", "PUT /api/v1/auth/login", "DELETE /api/v1/roles/:id"}, true},
+		{"path cambiado", []string{"GET /api/v1/users", "POST /api/v1/auth/logins", "DELETE /api/v1/roles/:id"}, true},
+		{"golden vacio", []string{}, true},
+		{"control: golden identico", got, false},
 	}
-	if len(want) > len(got) {
-		t.Errorf("rutas del golden que ya no se registran:\n  %s", strings.Join(want[len(got):], "\n  "))
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			diffs := routeDiff(got, c.want)
+			if c.quieroDiff && len(diffs) == 0 {
+				t.Errorf("la comparación del golden NO detectó la corrupción %q — un golden que no detecta es decoración", c.name)
+			}
+			if !c.quieroDiff && len(diffs) != 0 {
+				t.Errorf("control sano reportó diferencias que no existen:\n  %s", strings.Join(diffs, "\n  "))
+			}
+		})
+	}
+}
+
+// TestRoutesGoldenOrdenDeterminista — el golden compara en orden, así que el
+// orden de Routes() tiene que ser estable entre construcciones. Si el wiring
+// alguna vez itera un map para montar módulos, este test revienta antes de que
+// el golden empiece a fallar al azar.
+func TestRoutesGoldenOrdenDeterminista(t *testing.T) {
+	t.Setenv("PROMETHEUS_ENABLED", "true")
+	t.Setenv("JWT_SECRET", "golden-test-secret-not-a-real-credential-0123456789")
+	gin.SetMode(gin.TestMode)
+
+	primera := registeredRoutes(t)
+	segunda := registeredRoutes(t)
+
+	if !reflect.DeepEqual(primera, segunda) {
+		t.Errorf("router.Routes() no es determinista entre construcciones:\n  primera:  %v\n  segunda: %v", primera, segunda)
 	}
 }
