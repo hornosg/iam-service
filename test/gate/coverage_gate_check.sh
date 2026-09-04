@@ -145,6 +145,10 @@ main() {
     #     el importador compile). Cero lógica editada.
     local module
     module="$(go list -m)"
+    # git mv no crea los padres del destino (rename(2) falla si faltan) — el
+    # simulacro crea el módulo destino antes de mover, como T4 hará igual.
+    # Dentro del WORKTREE: master no se toca.
+    mkdir -p "$WT/$(dirname "$PKG_DST")"
     if ! git -C "$WT" mv "$PKG_SRC" "$PKG_DST"; then
         echo "  FAIL setup: git mv $PKG_SRC → $PKG_DST no pudo ejecutarse"
         FAILURES=$((FAILURES+1))
