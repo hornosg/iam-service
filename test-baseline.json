@@ -1,0 +1,11 @@
+{
+  "service": "iam-service",
+  "module": "iam",
+  "purpose": "Baseline congelado ANTES de la mudanza de ACC-E01 T4 (reorganización de src/ en los seis módulos). T4 no puede cerrar con un conteo de tests menor a func_test_count ni una cobertura global menor a coverage_global_percent. Registrado por ACC-E01 T2 el 2026-09-04.",
+  "func_test_count": 401,
+  "coverage_global_percent": 73.2,
+  "measured_at": "2026-09-04",
+  "command_func_test_count": "grep -rh \"^func Test\" --include=\"*_test.go\" . | wc -l",
+  "command_coverage_global": "go test -coverpkg=./src/... -coverprofile=coverage.out ./test/... && go tool cover -func=coverage.out",
+  "notes": "La cobertura se mide con -coverpkg=./src/... porque los tests viven en el arbol externo test/ (ver coverage-baseline.json, mismo caveat). Tres corridas el 2026-09-04: 73.2 (parcialmente cacheada), 73.4 y 73.4 (en vivo, -count=1). El rango de 0.2 puntos lo causa UNA funcion: startRevocationCleanup (src/auth/infrastructure/config/auth_module.go:198), goroutine asincrona de limpieza de revocaciones que segun timing ejecuta 0% o 30% de sus statements. Se registra el PISO observado (73.2) para que el criterio T4 're-medido >= registrado' no falle por esa varianza. Por que 73.2 y no el 80 de coverage-baseline.json: aquel 80.4 se midio el 2026-08-28 (PLAT-E21 T9) y ACC-E02 (aislamiento por caso de uso, completo 2026-09-03) reescribio 32 archivos de src/ (+2078/-812 lineas: repositorios tenant/user, guard RLS) despues de esa medicion. Este archivo congela el arbol ACTUAL, no el de agosto. El 80 de coverage-baseline.json sigue siendo el umbral del gate de diff-coverage de CI; mecanismo distinto, no se toca aca."
+}
