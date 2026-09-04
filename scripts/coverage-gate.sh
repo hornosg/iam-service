@@ -65,9 +65,21 @@ else
 fi
 
 # 3. Hunks del lado NUEVO del diff (solo .go). Los archivos borrados los ignora el awk.
+#
+# --no-renames (ACC-E01 T3, 2026-09-04): con la rename detection por default de git,
+# un `git mv` de similitud 100% no produce hunks — el diff muestra sólo el header
+# "rename from/to" y el gate queda CIEGO ante la mudanza: imprime NOSTMTS ("Pasa")
+# sin medir una sola línea. Verificado empíricamente moviendo un paquete cubierto
+# al 100% (src/plan/application/response -> src/plans/...): sin el flag, 0 líneas
+# medidas y exit 0; con el flag, 5/5 statements medidos y la negativa (borrar los
+# tests que lo cubren) pasa de PASS a FAIL exit 1. Con --no-renames la mudanza
+# aparece como baja (path viejo, la ignora parse-diff.awk) + alta (path nuevo,
+# TODAS sus líneas cuentan como nuevas y se miden contra el coverprofile de HEAD,
+# que ya las tiene en el path nuevo). Toda la reorganización de ACC-E01 T4 son
+# git mv: sin este flag, el gate no defendería la mudanza que existe para proteger.
 HUNKS_FILE="$(mktemp)"
 trap 'rm -f "${HUNKS_FILE}"' EXIT
-git diff -U0 "${BASE_REF}...${HEAD_REF}" -- '*.go' \
+git diff --no-renames -U0 "${BASE_REF}...${HEAD_REF}" -- '*.go' \
   | awk -v mod="${MODULE}" -f "${SCRIPT_DIR}/parse-diff.awk" > "${HUNKS_FILE}"
 
 # 4. Diff-coverage: intersección coverprofile ∩ hunks.
