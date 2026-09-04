@@ -162,7 +162,17 @@ main() {
         finish
     fi
     git -C "$WT" add -A
-    git -C "$WT" commit -q -m "simulacro T3-check: git mv ${PKG_SRC} → ${PKG_DST} (imports mecánicos)"
+    # --no-verify: el pre-commit del repo (PLAT-E21 T9) hace `go build -o <dir>/
+    # $PKGS`, que con Go 1.26 falla para paquetes librería ("no main packages to
+    # build") — HALLAZGO reportado en la corrida del loop, no se toca acá (no es
+    # un archivo de test). El sanity `go build ./...` de arriba ya validó que el
+    # simulacro compila, que es lo que el hook quería garantizar. El commit vive
+    # en un worktree desechable, nunca llega a master.
+    if ! git -C "$WT" commit -q --no-verify -m "simulacro T3-check: git mv ${PKG_SRC} → ${PKG_DST} (imports mecánicos)"; then
+        echo "  FAIL setup: el commit del simulacro no pudo crearse — el resto mediría un diff vacío"
+        FAILURES=$((FAILURES+1))
+        finish
+    fi
 
     echo "== ACC-E01.T3 — el gate de diff-coverage ante una mudanza de archivos =="
     echo "base: ${BASE:0:12} · simulacro en worktree desechable (master no se toca)"
@@ -202,7 +212,10 @@ main() {
     echo ""
     echo "== T3-GATE-02 (negativa del contrato): borrar los tests que cubren lo movido → el gate falla =="
     git -C "$WT" rm -r -q "$COVERING_TESTS"
-    git -C "$WT" commit -q -m "negativa T3-check: borrar el paquete cubridor (${COVERING_TESTS})"
+    if ! git -C "$WT" commit -q --no-verify -m "negativa T3-check: borrar el paquete cubridor (${COVERING_TESTS})"; then
+        echo "  FAIL T3-GATE-02: el commit de la negativa no pudo crearse"
+        FAILURES=$((FAILURES+1))
+    fi
     run_gate "$WT"
     if [ "$GATE_RC" -eq 1 ]; then
         echo "  PASS T3-GATE-02: el gate falló (exit 1) — la pérdida de tests NO pasa en silencio"
