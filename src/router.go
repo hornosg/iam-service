@@ -23,16 +23,16 @@ import (
 	sharedlog "github.com/hornosg/go-shared/infrastructure/logging"
 	sharedmetrics "github.com/hornosg/go-shared/infrastructure/metrics"
 
-	"iam/src/identity/infrastructure/adapter"
-	"iam/src/identity/infrastructure/config"
-	authmw "iam/src/access/infrastructure/middleware"
-	"iam/src/access/infrastructure/s2s"
-	planConfig "iam/src/plans/infrastructure/config"
-	roleConfig "iam/src/access/infrastructure/config"
-	tenantConfig "iam/src/tenancy/infrastructure/config"
-	userConfig "iam/src/identity/infrastructure/config"
-	userRepo "iam/src/identity/infrastructure/persistence/repository"
-	userUC "iam/src/identity/application/usecase"
+	"github.com/hornosg/iam-service/src/identity/infrastructure/adapter"
+	"github.com/hornosg/iam-service/src/identity/infrastructure/config"
+	authmw "github.com/hornosg/iam-service/src/access/infrastructure/middleware"
+	"github.com/hornosg/iam-service/src/access/infrastructure/s2s"
+	planConfig "github.com/hornosg/iam-service/src/plans/infrastructure/config"
+	roleConfig "github.com/hornosg/iam-service/src/access/infrastructure/config"
+	tenantConfig "github.com/hornosg/iam-service/src/tenancy/infrastructure/config"
+	userConfig "github.com/hornosg/iam-service/src/identity/infrastructure/config"
+	userRepo "github.com/hornosg/iam-service/src/identity/infrastructure/persistence/repository"
+	userUC "github.com/hornosg/iam-service/src/identity/application/usecase"
 )
 
 func buildRouter(appDB *sql.DB, loginDB *sql.DB) *gin.Engine {

@@ -31,11 +31,11 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"iam"
+	"github.com/hornosg/iam-service"
 
 	sharedmigrate "github.com/hornosg/go-shared/migrate"
 
-	sharedpostgres "iam/src/shared/postgres"
+	sharedpostgres "github.com/hornosg/iam-service/src/shared/postgres"
 )
 
 func TestRLS_GuardMembresias(t *testing.T) {

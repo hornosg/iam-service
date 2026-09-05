@@ -13,7 +13,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 
 	sharedmigrate "github.com/hornosg/go-shared/migrate"
-	"iam"
+	"github.com/hornosg/iam-service"
 )
 
 // expectedCounts refleja el seed idempotente de las migraciones 005, 006 y 011.

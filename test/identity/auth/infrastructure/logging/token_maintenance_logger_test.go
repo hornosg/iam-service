@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"iam/src/identity/domain/port"
-	authlogging "iam/src/identity/infrastructure/logging"
+	"github.com/hornosg/iam-service/src/identity/domain/port"
+	authlogging "github.com/hornosg/iam-service/src/identity/infrastructure/logging"
 )
 
 func TestTokenMaintenanceLogger_CleanupCompleted_EmitsCanonicalLine(t *testing.T) {

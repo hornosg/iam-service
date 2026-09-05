@@ -7,10 +7,10 @@ import (
 	"github.com/google/uuid"
 	httpresp "github.com/hornosg/go-shared/infrastructure/response"
 
-	"iam/src/tenancy/application/request"
-	"iam/src/tenancy/application/usecase"
-	"iam/src/tenancy/domain/exception"
-	"iam/src/tenancy/infrastructure/criteria"
+	"github.com/hornosg/iam-service/src/tenancy/application/request"
+	"github.com/hornosg/iam-service/src/tenancy/application/usecase"
+	"github.com/hornosg/iam-service/src/tenancy/domain/exception"
+	"github.com/hornosg/iam-service/src/tenancy/infrastructure/criteria"
 )
 
 type TenantHandler struct {

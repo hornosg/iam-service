@@ -3,8 +3,8 @@ package usecase
 import (
 	"context"
 	"github.com/hornosg/go-shared/criteria"
-	"iam/src/tenancy/domain/entity"
-	"iam/src/tenancy/domain/port"
+	"github.com/hornosg/iam-service/src/tenancy/domain/entity"
+	"github.com/hornosg/iam-service/src/tenancy/domain/port"
 )
 
 // ListTenantsByCriteriaUseCase lista tenants usando criterios

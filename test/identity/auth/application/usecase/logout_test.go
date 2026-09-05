@@ -10,11 +10,11 @@ import (
 
 	"io"
 
-	"iam/src/identity/application/usecase"
-	"iam/src/identity/domain/value_object"
+	"github.com/hornosg/iam-service/src/identity/application/usecase"
+	"github.com/hornosg/iam-service/src/identity/domain/value_object"
 	sharedlog "github.com/hornosg/go-shared/infrastructure/logging"
-	authEntity "iam/test/identity/auth/domain/entity"
-	"iam/test/identity/auth/infrastructure/persistence/repository"
+	authEntity "github.com/hornosg/iam-service/test/identity/auth/domain/entity"
+	"github.com/hornosg/iam-service/test/identity/auth/infrastructure/persistence/repository"
 )
 
 func newTestClaims(userID uuid.UUID, tenantID uuid.UUID) *value_object.TokenClaims {

@@ -8,10 +8,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"iam/src/identity/application/usecase"
-	srcEntity "iam/src/identity/domain/entity"
-	"iam/test/identity/user/domain/entity"
-	"iam/test/identity/user/infrastructure/persistence/repository"
+	"github.com/hornosg/iam-service/src/identity/application/usecase"
+	srcEntity "github.com/hornosg/iam-service/src/identity/domain/entity"
+	"github.com/hornosg/iam-service/test/identity/user/domain/entity"
+	"github.com/hornosg/iam-service/test/identity/user/infrastructure/persistence/repository"
 )
 
 func TestUserFinderUseCase_FindUserByEmail_ReturnsUser(t *testing.T) {

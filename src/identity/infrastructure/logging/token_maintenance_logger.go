@@ -3,7 +3,7 @@ package logging
 import (
 	"io"
 
-	"iam/src/identity/domain/port"
+	"github.com/hornosg/iam-service/src/identity/domain/port"
 	sharedlog "github.com/hornosg/go-shared/infrastructure/logging"
 )
 

@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/hornosg/go-shared/criteria"
-	"iam/src/identity/application/response"
-	"iam/src/identity/domain/port"
+	"github.com/hornosg/iam-service/src/identity/application/response"
+	"github.com/hornosg/iam-service/src/identity/domain/port"
 )
 
 // ListUsersByCriteriaUseCase lista usuarios usando el patrón criteria

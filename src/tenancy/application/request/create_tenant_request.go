@@ -1,7 +1,7 @@
 package request
 
 import (
-	"iam/src/tenancy/domain/value_object"
+	"github.com/hornosg/iam-service/src/tenancy/domain/value_object"
 	"strings"
 
 	"github.com/google/uuid"

@@ -12,13 +12,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
 
-	"iam/src/identity/application/request"
-	"iam/src/identity/application/usecase"
-	"iam/src/identity/domain/port"
-	"iam/src/identity/domain/value_object"
-	"iam/src/identity/infrastructure/adapter"
+	"github.com/hornosg/iam-service/src/identity/application/request"
+	"github.com/hornosg/iam-service/src/identity/application/usecase"
+	"github.com/hornosg/iam-service/src/identity/domain/port"
+	"github.com/hornosg/iam-service/src/identity/domain/value_object"
+	"github.com/hornosg/iam-service/src/identity/infrastructure/adapter"
 	sharedlog "github.com/hornosg/go-shared/infrastructure/logging"
-	"iam/test/identity/auth/infrastructure/persistence/repository"
+	"github.com/hornosg/iam-service/test/identity/auth/infrastructure/persistence/repository"
 )
 
 type MockGoogleTokenVerifier struct {

@@ -1,6 +1,6 @@
 package port
 
-import "iam/src/identity/domain/value_object"
+import "github.com/hornosg/iam-service/src/identity/domain/value_object"
 
 type JWTService interface {
 	Sign(claims *value_object.TokenClaims) (string, error)

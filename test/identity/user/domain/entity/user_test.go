@@ -7,9 +7,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	srcEntity "iam/src/identity/domain/entity"
-	"iam/src/identity/domain/exception"
-	"iam/src/identity/domain/value_object"
+	srcEntity "github.com/hornosg/iam-service/src/identity/domain/entity"
+	"github.com/hornosg/iam-service/src/identity/domain/exception"
+	"github.com/hornosg/iam-service/src/identity/domain/value_object"
 )
 
 func TestNewUser_WithValidParams_CreatesUserWithDefaults(t *testing.T) {

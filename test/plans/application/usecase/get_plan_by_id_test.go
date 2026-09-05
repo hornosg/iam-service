@@ -8,10 +8,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"iam/src/plans/application/usecase"
-	planEntity "iam/test/plans/domain/entity"
-	"iam/test/plans/infrastructure/persistence/repository"
-	srcEntity "iam/src/plans/domain/entity"
+	"github.com/hornosg/iam-service/src/plans/application/usecase"
+	planEntity "github.com/hornosg/iam-service/test/plans/domain/entity"
+	"github.com/hornosg/iam-service/test/plans/infrastructure/persistence/repository"
+	srcEntity "github.com/hornosg/iam-service/src/plans/domain/entity"
 )
 
 func TestGetPlanByIDUseCase_Execute_ExistingPlan_ReturnsPlan(t *testing.T) {

@@ -1,7 +1,7 @@
 package entity
 
 import (
-	"iam/src/tenancy/domain/value_object"
+	"github.com/hornosg/iam-service/src/tenancy/domain/value_object"
 	"time"
 
 	"github.com/google/uuid"

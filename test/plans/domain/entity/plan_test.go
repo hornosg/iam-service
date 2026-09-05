@@ -6,8 +6,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	srcEntity "iam/src/plans/domain/entity"
-	"iam/src/plans/domain/value_object"
+	srcEntity "github.com/hornosg/iam-service/src/plans/domain/entity"
+	"github.com/hornosg/iam-service/src/plans/domain/value_object"
 )
 
 func TestNewPlan_WithValidParams_CreatesWithDefaults(t *testing.T) {

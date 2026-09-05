@@ -6,9 +6,9 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/hornosg/go-shared/domain/service"
-	"iam/src/identity/application/usecase"
-	"iam/src/identity/infrastructure/controller"
-	"iam/src/identity/infrastructure/persistence/repository"
+	"github.com/hornosg/iam-service/src/identity/application/usecase"
+	"github.com/hornosg/iam-service/src/identity/infrastructure/controller"
+	"github.com/hornosg/iam-service/src/identity/infrastructure/persistence/repository"
 )
 
 // SetupUserModule configura e inicializa el módulo de usuarios

@@ -11,12 +11,12 @@ import (
 	"github.com/lib/pq"
 
 	"github.com/hornosg/go-shared/criteria"
-	sharedctx "iam/src/shared/context"
-	sharedpostgres "iam/src/shared/postgres"
-	"iam/src/tenancy/domain/entity"
-	"iam/src/tenancy/domain/exception"
-	"iam/src/tenancy/domain/port"
-	"iam/src/tenancy/domain/value_object"
+	sharedctx "github.com/hornosg/iam-service/src/shared/context"
+	sharedpostgres "github.com/hornosg/iam-service/src/shared/postgres"
+	"github.com/hornosg/iam-service/src/tenancy/domain/entity"
+	"github.com/hornosg/iam-service/src/tenancy/domain/exception"
+	"github.com/hornosg/iam-service/src/tenancy/domain/port"
+	"github.com/hornosg/iam-service/src/tenancy/domain/value_object"
 )
 
 type PostgresTenantRepository struct {

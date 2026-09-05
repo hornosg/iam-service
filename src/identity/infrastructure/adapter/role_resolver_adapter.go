@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 
-	"iam/src/identity/domain/port"
+	"github.com/hornosg/iam-service/src/identity/domain/port"
 )
 
 // SQLRoleResolverAdapter implementa port.RoleResolver leyendo directamente la tabla

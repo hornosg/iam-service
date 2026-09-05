@@ -6,10 +6,10 @@ import (
 	"github.com/gin-gonic/gin"
 
 	sharedport "github.com/hornosg/go-shared/domain/port"
-	"iam/src/tenancy/application/usecase"
-	"iam/src/tenancy/infrastructure/controller"
-	"iam/src/tenancy/infrastructure/criteria"
-	"iam/src/tenancy/infrastructure/persistence/repository"
+	"github.com/hornosg/iam-service/src/tenancy/application/usecase"
+	"github.com/hornosg/iam-service/src/tenancy/infrastructure/controller"
+	"github.com/hornosg/iam-service/src/tenancy/infrastructure/criteria"
+	"github.com/hornosg/iam-service/src/tenancy/infrastructure/persistence/repository"
 )
 
 // SetupTenantScopedModule expone las rutas de gestión de un tenant por ID bajo el

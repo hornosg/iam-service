@@ -11,12 +11,12 @@ import (
 	"github.com/lib/pq"
 
 	"github.com/hornosg/go-shared/criteria"
-	sharedctx "iam/src/shared/context"
-	sharedpostgres "iam/src/shared/postgres"
-	"iam/src/identity/domain/entity"
-	"iam/src/identity/domain/exception"
-	"iam/src/identity/domain/port"
-	"iam/src/identity/domain/value_object"
+	sharedctx "github.com/hornosg/iam-service/src/shared/context"
+	sharedpostgres "github.com/hornosg/iam-service/src/shared/postgres"
+	"github.com/hornosg/iam-service/src/identity/domain/entity"
+	"github.com/hornosg/iam-service/src/identity/domain/exception"
+	"github.com/hornosg/iam-service/src/identity/domain/port"
+	"github.com/hornosg/iam-service/src/identity/domain/value_object"
 )
 
 type PostgresUserRepository struct {

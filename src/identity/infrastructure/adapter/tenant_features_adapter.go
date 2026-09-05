@@ -5,8 +5,8 @@ import (
 
 	"github.com/google/uuid"
 
-	auth_vo "iam/src/identity/domain/value_object"
-	tenantUC "iam/src/tenancy/application/usecase"
+	auth_vo "github.com/hornosg/iam-service/src/identity/domain/value_object"
+	tenantUC "github.com/hornosg/iam-service/src/tenancy/application/usecase"
 )
 
 // TenantFeaturesAdapter implements auth/domain/port.TenantService by wrapping

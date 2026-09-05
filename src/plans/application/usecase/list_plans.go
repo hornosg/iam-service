@@ -3,8 +3,8 @@ package usecase
 import (
 	"context"
 
-	"iam/src/plans/application/response"
-	"iam/src/plans/domain/port"
+	"github.com/hornosg/iam-service/src/plans/application/response"
+	"github.com/hornosg/iam-service/src/plans/domain/port"
 )
 
 type ListPlansUseCase struct {

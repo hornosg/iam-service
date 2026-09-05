@@ -2,8 +2,8 @@ package usecase
 
 import (
 	"context"
-	"iam/src/identity/domain/exception"
-	"iam/src/identity/domain/port"
+	"github.com/hornosg/iam-service/src/identity/domain/exception"
+	"github.com/hornosg/iam-service/src/identity/domain/port"
 
 	"github.com/google/uuid"
 )

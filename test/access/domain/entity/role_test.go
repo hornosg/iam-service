@@ -6,8 +6,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 
-	srcEntity "iam/src/access/domain/entity"
-	"iam/src/access/domain/value_object"
+	srcEntity "github.com/hornosg/iam-service/src/access/domain/entity"
+	"github.com/hornosg/iam-service/src/access/domain/value_object"
 )
 
 func TestNewRole_WithValidParams_CreatesWithDefaults(t *testing.T) {

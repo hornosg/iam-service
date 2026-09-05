@@ -8,13 +8,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"iam/src/tenancy/application/request"
-	"iam/src/tenancy/application/usecase"
-	"iam/src/tenancy/domain/entity"
-	"iam/src/tenancy/domain/exception"
+	"github.com/hornosg/iam-service/src/tenancy/application/request"
+	"github.com/hornosg/iam-service/src/tenancy/application/usecase"
+	"github.com/hornosg/iam-service/src/tenancy/domain/entity"
+	"github.com/hornosg/iam-service/src/tenancy/domain/exception"
 	sharedmetrics "github.com/hornosg/go-shared/infrastructure/metrics"
-	tenantMother "iam/test/tenancy/domain/entity"
-	"iam/test/tenancy/infrastructure/persistence/repository"
+	tenantMother "github.com/hornosg/iam-service/test/tenancy/domain/entity"
+	"github.com/hornosg/iam-service/test/tenancy/infrastructure/persistence/repository"
 )
 
 func TestCreateTenantUseCase_Execute_HappyPath_CreatesTenant(t *testing.T) {

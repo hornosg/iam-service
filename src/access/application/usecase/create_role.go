@@ -3,11 +3,11 @@ package usecase
 import (
 	"context"
 
-	"iam/src/access/application/request"
-	"iam/src/access/application/response"
-	"iam/src/access/domain/entity"
-	"iam/src/access/domain/exception"
-	"iam/src/access/domain/port"
+	"github.com/hornosg/iam-service/src/access/application/request"
+	"github.com/hornosg/iam-service/src/access/application/response"
+	"github.com/hornosg/iam-service/src/access/domain/entity"
+	"github.com/hornosg/iam-service/src/access/domain/exception"
+	"github.com/hornosg/iam-service/src/access/domain/port"
 )
 
 type CreateRoleUseCase struct {

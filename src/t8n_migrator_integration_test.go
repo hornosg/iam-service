@@ -42,7 +42,7 @@ import (
 
 	sharedmigrate "github.com/hornosg/go-shared/migrate"
 
-	iamroot "iam"
+	iamroot "github.com/hornosg/iam-service"
 )
 
 const (

@@ -5,7 +5,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"iam/src/identity/domain/value_object"
+	"github.com/hornosg/iam-service/src/identity/domain/value_object"
 )
 
 // TenantService is the port auth uses to fetch tenant feature flags for JWT generation.

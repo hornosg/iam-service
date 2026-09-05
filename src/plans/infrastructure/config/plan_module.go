@@ -5,10 +5,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"iam/src/plans/application/usecase"
-	"iam/src/plans/infrastructure/controller"
-	"iam/src/plans/infrastructure/criteria"
-	"iam/src/plans/infrastructure/persistence/repository"
+	"github.com/hornosg/iam-service/src/plans/application/usecase"
+	"github.com/hornosg/iam-service/src/plans/infrastructure/controller"
+	"github.com/hornosg/iam-service/src/plans/infrastructure/criteria"
+	"github.com/hornosg/iam-service/src/plans/infrastructure/persistence/repository"
 )
 
 // SetupPlanModule configura e inicializa el módulo de planes

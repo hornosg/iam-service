@@ -7,12 +7,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"iam/src/access/application/request"
-	"iam/src/access/application/usecase"
-	"iam/src/access/domain/entity"
-	"iam/src/access/domain/exception"
-	roleMother "iam/test/access/domain/entity"
-	"iam/test/access/infrastructure/persistence/repository"
+	"github.com/hornosg/iam-service/src/access/application/request"
+	"github.com/hornosg/iam-service/src/access/application/usecase"
+	"github.com/hornosg/iam-service/src/access/domain/entity"
+	"github.com/hornosg/iam-service/src/access/domain/exception"
+	roleMother "github.com/hornosg/iam-service/test/access/domain/entity"
+	"github.com/hornosg/iam-service/test/access/infrastructure/persistence/repository"
 )
 
 func TestCreateRoleUseCase_Execute_HappyPath_CreatesRole(t *testing.T) {

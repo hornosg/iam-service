@@ -11,12 +11,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"iam/src/identity/domain/entity"
-	"iam/src/identity/domain/port"
-	"iam/src/identity/domain/value_object"
-	"iam/src/identity/infrastructure/persistence/repository"
-	sharedctx "iam/src/shared/context"
-	"iam/test/testsupport/fakedb"
+	"github.com/hornosg/iam-service/src/identity/domain/entity"
+	"github.com/hornosg/iam-service/src/identity/domain/port"
+	"github.com/hornosg/iam-service/src/identity/domain/value_object"
+	"github.com/hornosg/iam-service/src/identity/infrastructure/persistence/repository"
+	sharedctx "github.com/hornosg/iam-service/src/shared/context"
+	"github.com/hornosg/iam-service/test/testsupport/fakedb"
 )
 
 // ACC-E02 T5: el repositorio corre bajo account_app, que es NOBYPASSRLS. Si una

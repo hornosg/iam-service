@@ -13,14 +13,14 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 
-	authmw "iam/src/access/infrastructure/middleware"
-	"iam/src/access/infrastructure/s2s"
-	"iam/src/access/application/usecase"
-	"iam/src/access/domain/entity"
-	"iam/src/access/infrastructure/controller"
-	rolecriteria "iam/src/access/infrastructure/criteria"
-	roleMother "iam/test/access/domain/entity"
-	rolerepo "iam/test/access/infrastructure/persistence/repository"
+	authmw "github.com/hornosg/iam-service/src/access/infrastructure/middleware"
+	"github.com/hornosg/iam-service/src/access/infrastructure/s2s"
+	"github.com/hornosg/iam-service/src/access/application/usecase"
+	"github.com/hornosg/iam-service/src/access/domain/entity"
+	"github.com/hornosg/iam-service/src/access/infrastructure/controller"
+	rolecriteria "github.com/hornosg/iam-service/src/access/infrastructure/criteria"
+	roleMother "github.com/hornosg/iam-service/test/access/domain/entity"
+	rolerepo "github.com/hornosg/iam-service/test/access/infrastructure/persistence/repository"
 )
 
 const (

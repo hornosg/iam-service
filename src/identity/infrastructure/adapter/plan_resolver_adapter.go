@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"iam/src/identity/domain/port"
+	"github.com/hornosg/iam-service/src/identity/domain/port"
 )
 
 // SQLPlanResolverAdapter implementa port.PlanResolver leyendo el plan del tenant con un

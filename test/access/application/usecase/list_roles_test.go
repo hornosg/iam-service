@@ -7,10 +7,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"iam/src/access/application/usecase"
-	"iam/src/access/domain/entity"
-	roleMother "iam/test/access/domain/entity"
-	"iam/test/access/infrastructure/persistence/repository"
+	"github.com/hornosg/iam-service/src/access/application/usecase"
+	"github.com/hornosg/iam-service/src/access/domain/entity"
+	roleMother "github.com/hornosg/iam-service/test/access/domain/entity"
+	"github.com/hornosg/iam-service/test/access/infrastructure/persistence/repository"
 )
 
 func TestListRolesUseCase_Execute_ReturnsRoles(t *testing.T) {

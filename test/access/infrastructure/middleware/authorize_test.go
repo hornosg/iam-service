@@ -21,9 +21,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	authmw "iam/src/access/infrastructure/middleware"
-	"iam/src/access/infrastructure/s2s"
-	sharedctx "iam/src/shared/context"
+	authmw "github.com/hornosg/iam-service/src/access/infrastructure/middleware"
+	"github.com/hornosg/iam-service/src/access/infrastructure/s2s"
+	sharedctx "github.com/hornosg/iam-service/src/shared/context"
 )
 
 const (

@@ -11,10 +11,10 @@ import (
 	"github.com/lib/pq"
 
 	"github.com/hornosg/go-shared/criteria"
-	"iam/src/plans/domain/entity"
-	"iam/src/plans/domain/exception"
-	"iam/src/plans/domain/port"
-	"iam/src/plans/domain/value_object"
+	"github.com/hornosg/iam-service/src/plans/domain/entity"
+	"github.com/hornosg/iam-service/src/plans/domain/exception"
+	"github.com/hornosg/iam-service/src/plans/domain/port"
+	"github.com/hornosg/iam-service/src/plans/domain/value_object"
 )
 
 type PostgresPlanRepository struct {

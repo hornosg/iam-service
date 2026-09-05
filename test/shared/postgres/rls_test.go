@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	sharedpostgres "iam/src/shared/postgres"
-	"iam/test/testsupport/fakedb"
+	sharedpostgres "github.com/hornosg/iam-service/src/shared/postgres"
+	"github.com/hornosg/iam-service/test/testsupport/fakedb"
 )
 
 // --- tests ------------------------------------------------------------------

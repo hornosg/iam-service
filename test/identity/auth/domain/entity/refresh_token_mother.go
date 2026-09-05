@@ -3,7 +3,7 @@ package entity
 import (
 	"time"
 
-	"iam/src/identity/domain/entity"
+	"github.com/hornosg/iam-service/src/identity/domain/entity"
 
 	"github.com/google/uuid"
 )

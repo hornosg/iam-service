@@ -2,8 +2,8 @@ package usecase
 
 import (
 	"context"
-	"iam/src/tenancy/domain/port"
-	"iam/src/tenancy/domain/value_object"
+	"github.com/hornosg/iam-service/src/tenancy/domain/port"
+	"github.com/hornosg/iam-service/src/tenancy/domain/value_object"
 
 	"github.com/google/uuid"
 )

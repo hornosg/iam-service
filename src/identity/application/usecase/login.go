@@ -11,12 +11,12 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 
-	"iam/src/identity/application/request"
-	"iam/src/identity/application/response"
-	"iam/src/identity/domain/entity"
-	"iam/src/identity/domain/port"
-	"iam/src/identity/domain/value_object"
-	sharedctx "iam/src/shared/context"
+	"github.com/hornosg/iam-service/src/identity/application/request"
+	"github.com/hornosg/iam-service/src/identity/application/response"
+	"github.com/hornosg/iam-service/src/identity/domain/entity"
+	"github.com/hornosg/iam-service/src/identity/domain/port"
+	"github.com/hornosg/iam-service/src/identity/domain/value_object"
+	sharedctx "github.com/hornosg/iam-service/src/shared/context"
 	sharedport "github.com/hornosg/go-shared/domain/port"
 )
 

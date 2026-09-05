@@ -2,7 +2,7 @@ package port
 
 import (
 	"github.com/hornosg/go-shared/criteria"
-	"iam/src/plans/domain/entity"
+	"github.com/hornosg/iam-service/src/plans/domain/entity"
 )
 
 // PlanCriteriaRepository extiende PlanRepository con soporte para criteria

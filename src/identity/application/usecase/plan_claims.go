@@ -5,8 +5,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"iam/src/identity/domain/port"
-	"iam/src/identity/domain/value_object"
+	"github.com/hornosg/iam-service/src/identity/domain/port"
+	"github.com/hornosg/iam-service/src/identity/domain/value_object"
 )
 
 // resolvePlanClaim resuelve el plan del tenant para poblar el claim `plan` del JWT

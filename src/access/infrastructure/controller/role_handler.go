@@ -7,10 +7,10 @@ import (
 	"github.com/google/uuid"
 	httpresp "github.com/hornosg/go-shared/infrastructure/response"
 
-	"iam/src/access/application/request"
-	"iam/src/access/application/usecase"
-	"iam/src/access/domain/exception"
-	"iam/src/access/infrastructure/criteria"
+	"github.com/hornosg/iam-service/src/access/application/request"
+	"github.com/hornosg/iam-service/src/access/application/usecase"
+	"github.com/hornosg/iam-service/src/access/domain/exception"
+	"github.com/hornosg/iam-service/src/access/infrastructure/criteria"
 )
 
 type RoleHandler struct {

@@ -2,8 +2,8 @@ package port
 
 import (
 	"context"
-	"iam/src/plans/domain/entity"
-	"iam/src/plans/domain/value_object"
+	"github.com/hornosg/iam-service/src/plans/domain/entity"
+	"github.com/hornosg/iam-service/src/plans/domain/value_object"
 
 	"github.com/google/uuid"
 )

@@ -2,10 +2,10 @@ package usecase
 
 import (
 	"context"
-	"iam/src/identity/application/request"
-	"iam/src/identity/application/response"
-	"iam/src/identity/domain/exception"
-	"iam/src/identity/domain/port"
+	"github.com/hornosg/iam-service/src/identity/application/request"
+	"github.com/hornosg/iam-service/src/identity/application/response"
+	"github.com/hornosg/iam-service/src/identity/domain/exception"
+	"github.com/hornosg/iam-service/src/identity/domain/port"
 )
 
 type UpdateUserUseCase struct {

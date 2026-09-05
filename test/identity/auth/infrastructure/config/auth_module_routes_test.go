@@ -10,7 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 
-	"iam/src/identity/infrastructure/config"
+	"github.com/hornosg/iam-service/src/identity/infrastructure/config"
 )
 
 // ACC-E02 T8l (criterio (a)): pín negativo sobre la eliminación de

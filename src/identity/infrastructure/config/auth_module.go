@@ -10,13 +10,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"iam/src/identity/application/usecase"
-	"iam/src/identity/domain/port"
-	"iam/src/identity/infrastructure/adapter"
-	"iam/src/identity/infrastructure/controller"
-	authlogging "iam/src/identity/infrastructure/logging"
-	authmw "iam/src/identity/infrastructure/middleware"
-	"iam/src/identity/infrastructure/persistence/repository"
+	"github.com/hornosg/iam-service/src/identity/application/usecase"
+	"github.com/hornosg/iam-service/src/identity/domain/port"
+	"github.com/hornosg/iam-service/src/identity/infrastructure/adapter"
+	"github.com/hornosg/iam-service/src/identity/infrastructure/controller"
+	authlogging "github.com/hornosg/iam-service/src/identity/infrastructure/logging"
+	authmw "github.com/hornosg/iam-service/src/identity/infrastructure/middleware"
+	"github.com/hornosg/iam-service/src/identity/infrastructure/persistence/repository"
 	sharedlog "github.com/hornosg/go-shared/infrastructure/logging"
 )
 

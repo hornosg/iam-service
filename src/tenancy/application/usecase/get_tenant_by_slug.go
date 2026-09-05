@@ -3,8 +3,8 @@ package usecase
 import (
 	"context"
 
-	"iam/src/tenancy/application/response"
-	"iam/src/tenancy/domain/port"
+	"github.com/hornosg/iam-service/src/tenancy/application/response"
+	"github.com/hornosg/iam-service/src/tenancy/domain/port"
 )
 
 type GetTenantBySlugUseCase struct {

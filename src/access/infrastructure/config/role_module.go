@@ -5,10 +5,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"iam/src/access/application/usecase"
-	"iam/src/access/infrastructure/controller"
-	"iam/src/access/infrastructure/criteria"
-	"iam/src/access/infrastructure/persistence/repository"
+	"github.com/hornosg/iam-service/src/access/application/usecase"
+	"github.com/hornosg/iam-service/src/access/infrastructure/controller"
+	"github.com/hornosg/iam-service/src/access/infrastructure/criteria"
+	"github.com/hornosg/iam-service/src/access/infrastructure/persistence/repository"
 )
 
 // SetupRoleModule configura e inicializa el módulo de roles.

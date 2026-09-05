@@ -7,11 +7,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	srcEntity "iam/src/tenancy/domain/entity"
-	"iam/src/tenancy/application/usecase"
-	"iam/src/tenancy/domain/value_object"
-	tenantMother "iam/test/tenancy/domain/entity"
-	"iam/test/tenancy/infrastructure/persistence/repository"
+	srcEntity "github.com/hornosg/iam-service/src/tenancy/domain/entity"
+	"github.com/hornosg/iam-service/src/tenancy/application/usecase"
+	"github.com/hornosg/iam-service/src/tenancy/domain/value_object"
+	tenantMother "github.com/hornosg/iam-service/test/tenancy/domain/entity"
+	"github.com/hornosg/iam-service/test/tenancy/infrastructure/persistence/repository"
 )
 
 func TestListTenantsUseCase_Execute_ReturnsPaginatedTenants(t *testing.T) {

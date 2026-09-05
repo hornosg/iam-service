@@ -1,4 +1,4 @@
-module iam
+module github.com/hornosg/iam-service
 
 go 1.25.0
 

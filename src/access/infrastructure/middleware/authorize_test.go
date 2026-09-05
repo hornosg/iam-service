@@ -9,7 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 
-	"iam/src/access/infrastructure/s2s"
+	"github.com/hornosg/iam-service/src/access/infrastructure/s2s"
 )
 
 const (

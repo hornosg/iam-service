@@ -6,7 +6,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 
-	"iam/src/identity/domain/value_object"
+	"github.com/hornosg/iam-service/src/identity/domain/value_object"
 )
 
 type JWTServiceAdapter struct {

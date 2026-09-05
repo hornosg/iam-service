@@ -3,8 +3,8 @@ package usecase
 import (
 	"context"
 
-	"iam/src/tenancy/domain/exception"
-	"iam/src/tenancy/domain/port"
+	"github.com/hornosg/iam-service/src/tenancy/domain/exception"
+	"github.com/hornosg/iam-service/src/tenancy/domain/port"
 
 	"github.com/google/uuid"
 )

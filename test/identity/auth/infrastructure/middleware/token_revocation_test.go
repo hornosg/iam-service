@@ -15,11 +15,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"iam/src/identity/domain/value_object"
-	"iam/src/identity/infrastructure/adapter"
-	"iam/src/identity/infrastructure/middleware"
-	sharedctx "iam/src/shared/context"
-	repo "iam/test/identity/auth/infrastructure/persistence/repository"
+	"github.com/hornosg/iam-service/src/identity/domain/value_object"
+	"github.com/hornosg/iam-service/src/identity/infrastructure/adapter"
+	"github.com/hornosg/iam-service/src/identity/infrastructure/middleware"
+	sharedctx "github.com/hornosg/iam-service/src/shared/context"
+	repo "github.com/hornosg/iam-service/test/identity/auth/infrastructure/persistence/repository"
 )
 
 // signingKey y altKey son fixtures de test (no secretos reales): los tokens

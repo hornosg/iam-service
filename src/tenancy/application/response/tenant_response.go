@@ -1,8 +1,8 @@
 package response
 
 import (
-	"iam/src/tenancy/domain/entity"
-	"iam/src/tenancy/domain/value_object"
+	"github.com/hornosg/iam-service/src/tenancy/domain/entity"
+	"github.com/hornosg/iam-service/src/tenancy/domain/value_object"
 	"time"
 
 	"github.com/google/uuid"

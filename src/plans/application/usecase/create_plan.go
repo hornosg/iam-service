@@ -3,11 +3,11 @@ package usecase
 import (
 	"context"
 
-	"iam/src/plans/application/request"
-	"iam/src/plans/application/response"
-	"iam/src/plans/domain/entity"
-	"iam/src/plans/domain/exception"
-	"iam/src/plans/domain/port"
+	"github.com/hornosg/iam-service/src/plans/application/request"
+	"github.com/hornosg/iam-service/src/plans/application/response"
+	"github.com/hornosg/iam-service/src/plans/domain/entity"
+	"github.com/hornosg/iam-service/src/plans/domain/exception"
+	"github.com/hornosg/iam-service/src/plans/domain/port"
 )
 
 type CreatePlanUseCase struct {

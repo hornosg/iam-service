@@ -7,10 +7,10 @@ import (
 	"github.com/google/uuid"
 	httpresp "github.com/hornosg/go-shared/infrastructure/response"
 
-	"iam/src/plans/application/request"
-	"iam/src/plans/application/usecase"
-	"iam/src/plans/domain/exception"
-	"iam/src/plans/infrastructure/criteria"
+	"github.com/hornosg/iam-service/src/plans/application/request"
+	"github.com/hornosg/iam-service/src/plans/application/usecase"
+	"github.com/hornosg/iam-service/src/plans/domain/exception"
+	"github.com/hornosg/iam-service/src/plans/infrastructure/criteria"
 )
 
 type PlanHandler struct {

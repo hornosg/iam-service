@@ -3,8 +3,8 @@ package usecase
 import (
 	"context"
 
-	"iam/src/access/application/response"
-	"iam/src/access/domain/port"
+	"github.com/hornosg/iam-service/src/access/application/response"
+	"github.com/hornosg/iam-service/src/access/domain/port"
 
 	"github.com/google/uuid"
 )

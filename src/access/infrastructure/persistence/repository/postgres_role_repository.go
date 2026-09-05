@@ -10,10 +10,10 @@ import (
 	"github.com/lib/pq"
 
 	"github.com/hornosg/go-shared/criteria"
-	"iam/src/access/domain/entity"
-	"iam/src/access/domain/exception"
-	"iam/src/access/domain/port"
-	"iam/src/access/domain/value_object"
+	"github.com/hornosg/iam-service/src/access/domain/entity"
+	"github.com/hornosg/iam-service/src/access/domain/exception"
+	"github.com/hornosg/iam-service/src/access/domain/port"
+	"github.com/hornosg/iam-service/src/access/domain/value_object"
 )
 
 type PostgresRoleRepository struct {

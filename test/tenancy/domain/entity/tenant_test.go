@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	srcEntity "iam/src/tenancy/domain/entity"
-	"iam/src/tenancy/domain/value_object"
+	srcEntity "github.com/hornosg/iam-service/src/tenancy/domain/entity"
+	"github.com/hornosg/iam-service/src/tenancy/domain/value_object"
 )
 
 func TestNewTenant_WithValidParams_CreatesWithDefaults(t *testing.T) {

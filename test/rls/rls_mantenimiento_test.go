@@ -46,13 +46,13 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"iam"
+	"github.com/hornosg/iam-service"
 
-	"iam/src/identity/infrastructure/persistence/repository"
+	"github.com/hornosg/iam-service/src/identity/infrastructure/persistence/repository"
 
 	sharedmigrate "github.com/hornosg/go-shared/migrate"
 
-	sharedpostgres "iam/src/shared/postgres"
+	sharedpostgres "github.com/hornosg/iam-service/src/shared/postgres"
 )
 
 // TestRLS_MantenimientoRevocaciones verifica el escape de mantenimiento contra

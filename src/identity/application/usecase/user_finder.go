@@ -3,7 +3,7 @@ package usecase
 import (
 	"context"
 	"github.com/hornosg/go-shared/domain/service"
-	"iam/src/identity/domain/port"
+	"github.com/hornosg/iam-service/src/identity/domain/port"
 
 	"github.com/google/uuid"
 )

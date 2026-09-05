@@ -3,8 +3,8 @@ package usecase
 import (
 	"context"
 	"github.com/hornosg/go-shared/criteria"
-	"iam/src/plans/domain/entity"
-	"iam/src/plans/domain/port"
+	"github.com/hornosg/iam-service/src/plans/domain/entity"
+	"github.com/hornosg/iam-service/src/plans/domain/port"
 )
 
 // ListPlansByCriteriaUseCase lista planes usando criterios

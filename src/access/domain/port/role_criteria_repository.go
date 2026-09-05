@@ -2,7 +2,7 @@ package port
 
 import (
 	"github.com/hornosg/go-shared/criteria"
-	"iam/src/access/domain/entity"
+	"github.com/hornosg/iam-service/src/access/domain/entity"
 )
 
 // RoleCriteriaRepository extiende RoleRepository con soporte para criteria

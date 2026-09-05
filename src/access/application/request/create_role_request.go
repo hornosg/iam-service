@@ -1,7 +1,7 @@
 package request
 
 import (
-	"iam/src/access/domain/value_object"
+	"github.com/hornosg/iam-service/src/access/domain/value_object"
 )
 
 // CreateRoleRequest模型 la creación de un rol.

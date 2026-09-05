@@ -7,11 +7,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 
-	"iam/src/tenancy/application/usecase"
-	"iam/src/tenancy/domain/entity"
-	"iam/src/tenancy/domain/exception"
-	tenantMother "iam/test/tenancy/domain/entity"
-	"iam/test/tenancy/infrastructure/persistence/repository"
+	"github.com/hornosg/iam-service/src/tenancy/application/usecase"
+	"github.com/hornosg/iam-service/src/tenancy/domain/entity"
+	"github.com/hornosg/iam-service/src/tenancy/domain/exception"
+	tenantMother "github.com/hornosg/iam-service/test/tenancy/domain/entity"
+	"github.com/hornosg/iam-service/test/tenancy/infrastructure/persistence/repository"
 )
 
 func TestDeleteTenantUseCase_Execute_HappyPath_DeletesTenant(t *testing.T) {

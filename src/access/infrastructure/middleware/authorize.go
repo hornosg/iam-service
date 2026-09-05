@@ -8,8 +8,8 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 
-	"iam/src/access/infrastructure/s2s"
-	sharedctx "iam/src/shared/context"
+	"github.com/hornosg/iam-service/src/access/infrastructure/s2s"
+	sharedctx "github.com/hornosg/iam-service/src/shared/context"
 )
 
 // ScopeMiddlewareFactory crea middlewares que requieren scopes S2S específicos.

@@ -1,7 +1,7 @@
 package response
 
 import (
-	"iam/src/access/domain/entity"
+	"github.com/hornosg/iam-service/src/access/domain/entity"
 	"time"
 
 	"github.com/google/uuid"

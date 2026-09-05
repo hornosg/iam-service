@@ -9,9 +9,9 @@ import (
 	"github.com/google/uuid"
 	httpresp "github.com/hornosg/go-shared/infrastructure/response"
 
-	"iam/src/identity/application/request"
-	"iam/src/identity/application/usecase"
-	"iam/src/identity/domain/value_object"
+	"github.com/hornosg/iam-service/src/identity/application/request"
+	"github.com/hornosg/iam-service/src/identity/application/usecase"
+	"github.com/hornosg/iam-service/src/identity/domain/value_object"
 )
 
 type AuthHandler struct {

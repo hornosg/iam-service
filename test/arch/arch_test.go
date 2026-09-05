@@ -87,7 +87,7 @@ func goListSrc(t *testing.T) []pkgInfo {
 	return pkgs
 }
 
-// modulePrefix es el path del módulo con barra final ("iam/"), para identificar
+// modulePrefix es el path del módulo con barra final (p.ej. "github.com/hornosg/iam-service/"), para identificar
 // packages propios vs externos/stdlib.
 func modulePrefix(t *testing.T) string {
 	t.Helper()
@@ -99,7 +99,7 @@ func modulePrefix(t *testing.T) string {
 }
 
 // hasSegment dice si un import path tiene un segmento exacto (no subcadena).
-// "iam/src/identity/domain/port" -> hasSegment("port")=true, hasSegment("domain")=true.
+// "github.com/hornosg/iam-service/src/identity/domain/port" -> hasSegment("port")=true, hasSegment("domain")=true.
 func hasSegment(path, seg string) bool {
 	for _, s := range strings.Split(path, "/") {
 		if s == seg {

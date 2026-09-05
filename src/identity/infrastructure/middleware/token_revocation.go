@@ -11,9 +11,9 @@ import (
 	sharedservice "github.com/hornosg/go-shared/domain/service"
 	httpresp "github.com/hornosg/go-shared/infrastructure/response"
 
-	"iam/src/identity/domain/port"
-	"iam/src/identity/infrastructure/adapter"
-	sharedctx "iam/src/shared/context"
+	"github.com/hornosg/iam-service/src/identity/domain/port"
+	"github.com/hornosg/iam-service/src/identity/infrastructure/adapter"
+	sharedctx "github.com/hornosg/iam-service/src/shared/context"
 )
 
 type TokenRevocationConfig struct {

@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"iam/src/access/infrastructure/s2s"
+	"github.com/hornosg/iam-service/src/access/infrastructure/s2s"
 )
 
 // registry.go es lógica pura de scopes S2S (sin DB): carga de env, lookup

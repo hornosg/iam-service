@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"iam/src/identity/domain/port"
+	"github.com/hornosg/iam-service/src/identity/domain/port"
 )
 
 type HTTPGoogleTokenVerifier struct {

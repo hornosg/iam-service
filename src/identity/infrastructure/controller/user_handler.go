@@ -7,10 +7,10 @@ import (
 	"github.com/google/uuid"
 	httpresp "github.com/hornosg/go-shared/infrastructure/response"
 
-	"iam/src/identity/application/request"
-	"iam/src/identity/application/usecase"
-	"iam/src/identity/domain/exception"
-	userCriteria "iam/src/identity/infrastructure/criteria"
+	"github.com/hornosg/iam-service/src/identity/application/request"
+	"github.com/hornosg/iam-service/src/identity/application/usecase"
+	"github.com/hornosg/iam-service/src/identity/domain/exception"
+	userCriteria "github.com/hornosg/iam-service/src/identity/infrastructure/criteria"
 )
 
 // UserHandler muestra cómo se vería el handler usando el nuevo sistema de criterios

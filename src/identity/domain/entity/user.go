@@ -1,10 +1,10 @@
 package entity
 
 import (
-	"iam/src/identity/domain/value_object"
+	"github.com/hornosg/iam-service/src/identity/domain/value_object"
 	"time"
 
-	"iam/src/identity/domain/exception"
+	"github.com/hornosg/iam-service/src/identity/domain/exception"
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"

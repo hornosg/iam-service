@@ -8,11 +8,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"iam/src/identity/application/usecase"
-	"iam/src/identity/domain/entity"
-	"iam/src/identity/domain/value_object"
-	userMother "iam/test/identity/user/domain/entity"
-	"iam/test/identity/user/infrastructure/persistence/repository"
+	"github.com/hornosg/iam-service/src/identity/application/usecase"
+	"github.com/hornosg/iam-service/src/identity/domain/entity"
+	"github.com/hornosg/iam-service/src/identity/domain/value_object"
+	userMother "github.com/hornosg/iam-service/test/identity/user/domain/entity"
+	"github.com/hornosg/iam-service/test/identity/user/infrastructure/persistence/repository"
 )
 
 func TestListUsersUseCase_Execute_ByTenant_ReturnsUsers(t *testing.T) {

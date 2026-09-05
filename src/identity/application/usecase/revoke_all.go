@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"iam/src/identity/domain/port"
+	"github.com/hornosg/iam-service/src/identity/domain/port"
 	sharedport "github.com/hornosg/go-shared/domain/port"
 )
 

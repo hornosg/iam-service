@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"iam/src/tenancy/domain/value_object"
+	"github.com/hornosg/iam-service/src/tenancy/domain/value_object"
 )
 
 func TestNewTenantFeatures_DefaultValues_AllDisabled(t *testing.T) {

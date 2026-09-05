@@ -7,7 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 
-	sharedctx "iam/src/shared/context"
+	sharedctx "github.com/hornosg/iam-service/src/shared/context"
 )
 
 func TestTenantIDFromContext_DevuelveElTenantInyectado(t *testing.T) {

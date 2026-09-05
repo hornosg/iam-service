@@ -9,12 +9,12 @@ import (
 	"github.com/hornosg/go-shared/infrastructure/env"
 	"github.com/hornosg/go-shared/infrastructure/postgres"
 
-	sharedpostgres "iam/src/shared/postgres"
-	"iam/src/shared/validator"
+	sharedpostgres "github.com/hornosg/iam-service/src/shared/postgres"
+	"github.com/hornosg/iam-service/src/shared/validator"
 
 	sharedmigrate "github.com/hornosg/go-shared/migrate"
 
-	iamroot "iam"
+	iamroot "github.com/hornosg/iam-service"
 )
 
 func init() {

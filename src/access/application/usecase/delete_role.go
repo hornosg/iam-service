@@ -3,9 +3,9 @@ package usecase
 import (
 	"context"
 
-	"iam/src/access/domain/exception"
-	"iam/src/access/domain/port"
-	"iam/src/access/domain/value_object"
+	"github.com/hornosg/iam-service/src/access/domain/exception"
+	"github.com/hornosg/iam-service/src/access/domain/port"
+	"github.com/hornosg/iam-service/src/access/domain/value_object"
 
 	"github.com/google/uuid"
 )

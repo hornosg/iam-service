@@ -6,12 +6,12 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"iam/src/plans/application/request"
-	"iam/src/plans/application/usecase"
-	"iam/src/plans/domain/entity"
-	"iam/src/plans/domain/exception"
-	planEntity "iam/test/plans/domain/entity"
-	"iam/test/plans/infrastructure/persistence/repository"
+	"github.com/hornosg/iam-service/src/plans/application/request"
+	"github.com/hornosg/iam-service/src/plans/application/usecase"
+	"github.com/hornosg/iam-service/src/plans/domain/entity"
+	"github.com/hornosg/iam-service/src/plans/domain/exception"
+	planEntity "github.com/hornosg/iam-service/test/plans/domain/entity"
+	"github.com/hornosg/iam-service/test/plans/infrastructure/persistence/repository"
 )
 
 func TestCreatePlanUseCase_Execute(t *testing.T) {

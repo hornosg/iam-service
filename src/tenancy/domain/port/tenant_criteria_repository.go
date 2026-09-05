@@ -2,7 +2,7 @@ package port
 
 import (
 	"github.com/hornosg/go-shared/criteria"
-	"iam/src/tenancy/domain/entity"
+	"github.com/hornosg/iam-service/src/tenancy/domain/entity"
 )
 
 // TenantCriteriaRepository extiende TenantRepository con soporte para criteria

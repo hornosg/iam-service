@@ -7,11 +7,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 
-	"iam/src/identity/application/usecase"
-	"iam/src/identity/domain/entity"
-	"iam/src/identity/domain/exception"
-	userMother "iam/test/identity/user/domain/entity"
-	"iam/test/identity/user/infrastructure/persistence/repository"
+	"github.com/hornosg/iam-service/src/identity/application/usecase"
+	"github.com/hornosg/iam-service/src/identity/domain/entity"
+	"github.com/hornosg/iam-service/src/identity/domain/exception"
+	userMother "github.com/hornosg/iam-service/test/identity/user/domain/entity"
+	"github.com/hornosg/iam-service/test/identity/user/infrastructure/persistence/repository"
 )
 
 func TestDeleteUserUseCase_Execute_HappyPath_DeletesUser(t *testing.T) {

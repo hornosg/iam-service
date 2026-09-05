@@ -2,8 +2,8 @@ package config
 
 import (
 	"database/sql"
-	"iam/src/api/docs"
-	"iam/src/api/health"
+	"github.com/hornosg/iam-service/src/api/docs"
+	"github.com/hornosg/iam-service/src/api/health"
 
 	"github.com/gin-gonic/gin"
 )

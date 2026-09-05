@@ -9,13 +9,13 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 
-	"iam/src/identity/application/usecase"
-	"iam/src/identity/domain/entity"
-	"iam/src/identity/domain/port"
-	auth_vo "iam/src/identity/domain/value_object"
-	"iam/src/identity/infrastructure/adapter"
-	authEntity "iam/test/identity/auth/domain/entity"
-	"iam/test/identity/auth/infrastructure/persistence/repository"
+	"github.com/hornosg/iam-service/src/identity/application/usecase"
+	"github.com/hornosg/iam-service/src/identity/domain/entity"
+	"github.com/hornosg/iam-service/src/identity/domain/port"
+	auth_vo "github.com/hornosg/iam-service/src/identity/domain/value_object"
+	"github.com/hornosg/iam-service/src/identity/infrastructure/adapter"
+	authEntity "github.com/hornosg/iam-service/test/identity/auth/domain/entity"
+	"github.com/hornosg/iam-service/test/identity/auth/infrastructure/persistence/repository"
 )
 
 // MockUserService implementa port.UserService para pruebas

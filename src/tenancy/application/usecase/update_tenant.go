@@ -3,11 +3,11 @@ package usecase
 import (
 	"context"
 
-	"iam/src/tenancy/application/request"
-	"iam/src/tenancy/application/response"
-	"iam/src/tenancy/domain/exception"
-	"iam/src/tenancy/domain/port"
-	"iam/src/tenancy/domain/value_object"
+	"github.com/hornosg/iam-service/src/tenancy/application/request"
+	"github.com/hornosg/iam-service/src/tenancy/application/response"
+	"github.com/hornosg/iam-service/src/tenancy/domain/exception"
+	"github.com/hornosg/iam-service/src/tenancy/domain/port"
+	"github.com/hornosg/iam-service/src/tenancy/domain/value_object"
 
 	"github.com/google/uuid"
 )

@@ -6,8 +6,8 @@ import (
 	"sync"
 
 	"github.com/hornosg/go-shared/criteria"
-	"iam/src/identity/domain/entity"
-	"iam/src/identity/domain/value_object"
+	"github.com/hornosg/iam-service/src/identity/domain/entity"
+	"github.com/hornosg/iam-service/src/identity/domain/value_object"
 
 	"github.com/google/uuid"
 )

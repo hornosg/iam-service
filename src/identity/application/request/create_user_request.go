@@ -2,7 +2,7 @@ package request
 
 import (
 	"errors"
-	"iam/src/identity/domain/value_object"
+	"github.com/hornosg/iam-service/src/identity/domain/value_object"
 
 	"github.com/google/uuid"
 )

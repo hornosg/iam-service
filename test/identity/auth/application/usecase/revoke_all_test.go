@@ -10,10 +10,10 @@ import (
 
 	"io"
 
-	"iam/src/identity/application/usecase"
+	"github.com/hornosg/iam-service/src/identity/application/usecase"
 	sharedlog "github.com/hornosg/go-shared/infrastructure/logging"
-	authEntity "iam/test/identity/auth/domain/entity"
-	"iam/test/identity/auth/infrastructure/persistence/repository"
+	authEntity "github.com/hornosg/iam-service/test/identity/auth/domain/entity"
+	"github.com/hornosg/iam-service/test/identity/auth/infrastructure/persistence/repository"
 )
 
 func TestRevokeAllUseCase_Execute_HappyPath_RevokesAllTokens(t *testing.T) {

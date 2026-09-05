@@ -43,26 +43,26 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"iam"
+	"github.com/hornosg/iam-service"
 
-	"iam/src/identity/domain/value_object"
+	"github.com/hornosg/iam-service/src/identity/domain/value_object"
 
-	"iam/src/identity/infrastructure/adapter"
-	authconfig "iam/src/identity/infrastructure/config"
-	authmw "iam/src/access/infrastructure/middleware"
-	"iam/src/access/infrastructure/s2s"
-	"iam/src/shared/validator"
-	planconfig "iam/src/plans/infrastructure/config"
-	roleconfig "iam/src/access/infrastructure/config"
-	tenantconfig "iam/src/tenancy/infrastructure/config"
-	userconfig "iam/src/identity/infrastructure/config"
-	useruc "iam/src/identity/application/usecase"
-	userrepo "iam/src/identity/infrastructure/persistence/repository"
+	"github.com/hornosg/iam-service/src/identity/infrastructure/adapter"
+	authconfig "github.com/hornosg/iam-service/src/identity/infrastructure/config"
+	authmw "github.com/hornosg/iam-service/src/access/infrastructure/middleware"
+	"github.com/hornosg/iam-service/src/access/infrastructure/s2s"
+	"github.com/hornosg/iam-service/src/shared/validator"
+	planconfig "github.com/hornosg/iam-service/src/plans/infrastructure/config"
+	roleconfig "github.com/hornosg/iam-service/src/access/infrastructure/config"
+	tenantconfig "github.com/hornosg/iam-service/src/tenancy/infrastructure/config"
+	userconfig "github.com/hornosg/iam-service/src/identity/infrastructure/config"
+	useruc "github.com/hornosg/iam-service/src/identity/application/usecase"
+	userrepo "github.com/hornosg/iam-service/src/identity/infrastructure/persistence/repository"
 
 	sharedport "github.com/hornosg/go-shared/domain/port"
 	sharedmigrate "github.com/hornosg/go-shared/migrate"
 
-	sharedpostgres "iam/src/shared/postgres"
+	sharedpostgres "github.com/hornosg/iam-service/src/shared/postgres"
 )
 
 const (

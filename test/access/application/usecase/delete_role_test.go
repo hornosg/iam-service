@@ -7,11 +7,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 
-	"iam/src/access/application/usecase"
-	"iam/src/access/domain/entity"
-	"iam/src/access/domain/exception"
-	roleMother "iam/test/access/domain/entity"
-	"iam/test/access/infrastructure/persistence/repository"
+	"github.com/hornosg/iam-service/src/access/application/usecase"
+	"github.com/hornosg/iam-service/src/access/domain/entity"
+	"github.com/hornosg/iam-service/src/access/domain/exception"
+	roleMother "github.com/hornosg/iam-service/test/access/domain/entity"
+	"github.com/hornosg/iam-service/test/access/infrastructure/persistence/repository"
 )
 
 func TestDeleteRoleUseCase_Execute_CustomRole_Succeeds(t *testing.T) {
