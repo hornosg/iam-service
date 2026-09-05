@@ -1,0 +1,14 @@
+# .trivyignore — excepciones al gate de vulnerabilidades de CI (PLAT-E35 T3)
+#
+# El gate (build-push-ghcr.yml, reusado de hornosg/notifications) falla ante CRITICAL/HIGH CON
+# fix disponible (--ignore-unfixed ya descarta los que no tienen parche upstream). Cada línea de
+# este archivo suprime UN identificador y REQUIERE justificación explícita: sin justificación,
+# no se agrega. El objetivo es que las excepciones sean auditables y caduquen, no que el gate se
+# degrade a un trámite.
+#
+# Formato de cada excepción (comentario inmediatamente arriba del ID):
+#   # <CVE-ID|GHSA-...> — <por qué es aceptable el riesgo> — rev: <YYYY-MM-DD> — <autor>
+#   CVE-XXXX-YYYYY
+#
+# Sin excepciones vigentes: el gate corre limpio contra la imagen de iam-service, sujeto a que
+# corra (ver caveat de ci-image.yml — pendiente de que notifications publique el workflow reusable).

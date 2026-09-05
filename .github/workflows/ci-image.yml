@@ -1,0 +1,33 @@
+# Caller del workflow reusable de imagen (PLAT-E35 T2, definido en hornosg/notifications) para
+# iam-service. En push a main/master (y en tags v*) construye, escanea con Trivy y publica
+# ghcr.io/hornosg/iam-service:<semver|sha> privado. `secrets: inherit` pasa GITHUB_TOKEN
+# (write:packages, automático de Actions) y GO_PRIVATE_TOKEN (módulos privados
+# github.com/mercadocercano — mismo secret que ya usan ci.yml/deploy.yml de este repo).
+#
+# target: production selecciona el stage distroless del Dockerfile (mismo stage que deploy.yml
+# usaba para DOCR) — no development/deps.
+#
+# Caveat (PLAT-E35 T3, 2026-09-05): este caller referencia un workflow reusable de OTRO repo
+# (hornosg/notifications) vía `uses: hornosg/notifications/...@main`. GitHub Actions resuelve esa
+# ruta contra el repo remoto real, no contra el working tree local — y el repo notifications
+# todavía no tiene ese archivo pusheado (su git está en .git_disabled, ver PLAT-E35 T2 caveat).
+# Mientras eso no se resuelva, este workflow no puede ejecutar en GitHub aunque el YAML sea válido.
+name: Image — build + scan + push (GHCR)
+
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  image:
+    uses: hornosg/notifications/.github/workflows/build-push-ghcr.yml@main
+    with:
+      image-name: iam-service
+      target: production
+    secrets: inherit
