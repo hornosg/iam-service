@@ -3,8 +3,12 @@ root = "."
 tmp_dir = "tmp"
 
 [build]
-# Comando para construir
-cmd = "go build -o ./tmp/main ./src/main.go"
+# Comando para construir — paquete completo, no main.go solo: ACC-E01 T8 movió
+# buildRouter a src/router.go y el build single-file quedó roto (el contenedor
+# levantaba unhealthy: "undefined: buildRouter" en package command-line-arguments).
+# -buildvcs=false: dentro del contenedor el .git montado no es legible como VCS
+# ("error obtaining VCS status: exit status 128") y el build muere.
+cmd = "go build -buildvcs=false -o ./tmp/main ./src/"
 # Binario a ejecutar
 bin = "./tmp/main"
 # Archivos que se deben vigilar para cambios

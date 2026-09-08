@@ -5,6 +5,11 @@
 *.so
 *.dylib
 
+# ACC-E03 T2: material criptográfico de firma — NUNCA se versiona.
+# Generación: scripts/generate-signing-keys.sh (privada 0600, kid RFC 7638).
+# Una clave privada versionada es un incidente L4.
+keys/
+
 # Test binary, built with `go test -c`
 *.test
 

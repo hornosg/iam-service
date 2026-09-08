@@ -32,19 +32,34 @@ type AuthModuleConfig struct {
 	RefreshTokenExpiry time.Duration
 	Namespace          string
 	GoogleClientID     string // usado solo para construir el adapter HTTP; no llega al dominio
+	// SigningKey es el par RSA + kid de ACC-E03 T2 (ADR-003 §b). Nil mientras
+	// T3 no consuma la firma asimétrica; en GIN_MODE=release la validación de
+	// arranque es fatal si falta (mismo patrón que JWT_SECRET).
+	SigningKey *SigningKey
 }
 
 // NewAuthModuleConfigFromEnv crea la configuración leyendo variables de entorno y valida seguridad.
 // En producción hace log.Fatal si JWT_SECRET es inseguro; en desarrollo solo muestra warning.
+// ACC-E03 T2: la clave de firma asimétrica sigue el MISMO patrón (fatal en release,
+// warning en desarrollo) vía LoadSigningKeyFromEnv.
 func NewAuthModuleConfigFromEnv() AuthModuleConfig {
 	jwtSecret := os.Getenv("JWT_SECRET")
 
+	ginMode := os.Getenv("GIN_MODE")
+
 	if err := ValidateJWTSecret(jwtSecret); err != nil {
-		ginMode := os.Getenv("GIN_MODE")
 		if ginMode == "release" {
 			log.Fatalf("SECURITY: %v", err)
 		}
 		log.Printf("SECURITY WARNING: %v (allowed in development mode)", err)
+	}
+
+	signingKey, err := LoadSigningKeyFromEnv()
+	if err != nil {
+		if ginMode == "release" {
+			log.Fatalf("SECURITY: %v", err)
+		}
+		log.Printf("SECURITY WARNING: %v (allowed in development mode — HS256 seguirá firmando hasta ACC-E03 T3)", err)
 	}
 
 	googleClientID := os.Getenv("GOOGLE_CLIENT_ID")
@@ -60,6 +75,7 @@ func NewAuthModuleConfigFromEnv() AuthModuleConfig {
 		RefreshTokenExpiry: 7 * 24 * time.Hour,
 		Namespace:          namespace,
 		GoogleClientID:     googleClientID,
+		SigningKey:         signingKey,
 	}
 }
 
