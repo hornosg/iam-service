@@ -122,7 +122,7 @@ func TestRefreshTokenUseCase_Execute(t *testing.T) {
 			AccessTokenExpiry:  15 * time.Minute,
 			RefreshTokenExpiry: 7 * 24 * time.Hour,
 		}
-		jwtSvc := adapter.NewJWTServiceAdapter("test-secret")
+		jwtSvc := adapter.NewJWTServiceAdapter(("test-secret"), newTestSigningKey())
 
 		refreshTokenUseCase := usecase.NewRefreshTokenUseCase(
 			config,
@@ -184,7 +184,7 @@ func TestRefreshTokenUseCase_Execute(t *testing.T) {
 			AccessTokenExpiry:  15 * time.Minute,
 			RefreshTokenExpiry: 7 * 24 * time.Hour,
 		}
-		jwtSvc := adapter.NewJWTServiceAdapter("test-secret")
+		jwtSvc := adapter.NewJWTServiceAdapter(("test-secret"), newTestSigningKey())
 
 		refreshTokenUseCase := usecase.NewRefreshTokenUseCase(
 			config,
@@ -217,7 +217,7 @@ func TestRefreshTokenUseCase_Execute(t *testing.T) {
 			AccessTokenExpiry:  15 * time.Minute,
 			RefreshTokenExpiry: 7 * 24 * time.Hour,
 		}
-		jwtSvc := adapter.NewJWTServiceAdapter("test-secret")
+		jwtSvc := adapter.NewJWTServiceAdapter(("test-secret"), newTestSigningKey())
 
 		refreshTokenUseCase := usecase.NewRefreshTokenUseCase(
 			config,
@@ -260,7 +260,7 @@ func TestRefreshTokenUseCase_Execute(t *testing.T) {
 			AccessTokenExpiry:  15 * time.Minute,
 			RefreshTokenExpiry: 7 * 24 * time.Hour,
 		}
-		jwtSvc := adapter.NewJWTServiceAdapter("test-secret")
+		jwtSvc := adapter.NewJWTServiceAdapter(("test-secret"), newTestSigningKey())
 
 		refreshTokenUseCase := usecase.NewRefreshTokenUseCase(
 			config,
@@ -301,7 +301,7 @@ func TestRefreshTokenUseCase_Execute(t *testing.T) {
 			AccessTokenExpiry:  15 * time.Minute,
 			RefreshTokenExpiry: 7 * 24 * time.Hour,
 		}
-		jwtSvc := adapter.NewJWTServiceAdapter("test-secret")
+		jwtSvc := adapter.NewJWTServiceAdapter(("test-secret"), newTestSigningKey())
 
 		refreshTokenUseCase := usecase.NewRefreshTokenUseCase(
 			config,
@@ -336,7 +336,7 @@ func TestRefreshTokenUseCase_Execute(t *testing.T) {
 			AccessTokenExpiry:  15 * time.Minute,
 			RefreshTokenExpiry: 7 * 24 * time.Hour,
 		}
-		jwtSvc := adapter.NewJWTServiceAdapter("test-secret")
+		jwtSvc := adapter.NewJWTServiceAdapter(("test-secret"), newTestSigningKey())
 
 		refreshTokenUseCase := usecase.NewRefreshTokenUseCase(
 			config,
@@ -390,7 +390,7 @@ func TestRefreshTokenUseCase_Execute(t *testing.T) {
 			AccessTokenExpiry:  15 * time.Minute,
 			RefreshTokenExpiry: 7 * 24 * time.Hour,
 		}
-		jwtSvc := adapter.NewJWTServiceAdapter("test-secret")
+		jwtSvc := adapter.NewJWTServiceAdapter(("test-secret"), newTestSigningKey())
 
 		refreshTokenUseCase := usecase.NewRefreshTokenUseCase(
 			config,
@@ -452,7 +452,7 @@ func TestRefreshTokenUseCase_Execute_TokenYaConsumido(t *testing.T) {
 			AccessTokenExpiry:  15 * time.Minute,
 			RefreshTokenExpiry: 7 * 24 * time.Hour,
 		}
-		jwtSvc := adapter.NewJWTServiceAdapter("test-secret")
+		jwtSvc := adapter.NewJWTServiceAdapter(("test-secret"), newTestSigningKey())
 
 		refreshTokenUseCase := usecase.NewRefreshTokenUseCase(
 			config,
@@ -506,7 +506,7 @@ func TestRefreshTokenUseCase_Execute_TokenYaConsumido(t *testing.T) {
 			AccessTokenExpiry:  15 * time.Minute,
 			RefreshTokenExpiry: 7 * 24 * time.Hour,
 		}
-		jwtSvc := adapter.NewJWTServiceAdapter("test-secret")
+		jwtSvc := adapter.NewJWTServiceAdapter(("test-secret"), newTestSigningKey())
 
 		refreshTokenUseCase := usecase.NewRefreshTokenUseCase(
 			config,

@@ -11,6 +11,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+
+	"github.com/hornosg/iam-service/src/identity/infrastructure/adapter"
 )
 
 // Material de firma asimétrica de tokens de usuario (ACC-E03 T2, ADR-003 §b/§c).
@@ -37,10 +39,11 @@ const (
 // SigningKey es el par material-clave + kid con el que T3 firmará.
 // El kid es determinístico: thumbprint RFC 7638 del material público, así dos
 // claves distintas nunca comparten kid por accidente de numeración (ADR-003 §c).
-type SigningKey struct {
-	PrivateKey *rsa.PrivateKey
-	KID        string
-}
+//
+// Alias del tipo canónico en adapter: el firmador (JWTServiceAdapter) es su
+// consumidor, y un struct gemelo en config obligaría a una conversión en el
+// wiring — config ya importa adapter, así que el alias no crea ciclo inverso.
+type SigningKey = adapter.SigningKey
 
 // LoadSigningKeyFromEnv carga y valida la clave de firma según ADR-003 §b.
 func LoadSigningKeyFromEnv() (*SigningKey, error) {
@@ -52,6 +55,12 @@ func LoadSigningKeyFromEnv() (*SigningKey, error) {
 		return nil, errors.New("signing key: JWT_PRIVATE_KEY_FILE and JWT_PRIVATE_KEY are both set — exactly one source is allowed")
 	case keyPath == "" && inline == "":
 		return nil, errors.New("signing key: set JWT_PRIVATE_KEY_FILE (mounted file, canonical) or JWT_PRIVATE_KEY (inline, dev only)")
+	case inline != "" && os.Getenv("GIN_MODE") == "release":
+		// ACC-E03 T3: objeción 1 de @dev-security sobre T2 — el ADR §b fija la
+		// inline "sólo para desarrollo local" y el código no lo enforceaba. Una
+		// env var es superficie de fuga real (docker inspect, /proc/*/environ,
+		// environ heredado); en release la clave llega por archivo montado.
+		return nil, errors.New("signing key: JWT_PRIVATE_KEY (inline) is development-only — in GIN_MODE=release set JWT_PRIVATE_KEY_FILE (ADR-003 §b)")
 	}
 
 	var (

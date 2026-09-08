@@ -168,7 +168,10 @@ func SetupAuthModule(
 	securityLogger := sharedlog.NewSecurityLogger("iam")
 
 	// Instanciar adapters (todos sobre account_app; el tenant ya se conoce post-auth).
-	jwtService := adapter.NewJWTServiceAdapter(config.JWTSecret)
+	// ACC-E03 T3: el firmador firma RS256+kid (nil en dev sin clave → Sign
+	// falla explícito) y verifica con aceptación dual: HS256 con el secreto
+	// viejo hasta que T6 lo retire, RS256 por kid del header (ADR-003 §f).
+	jwtService := adapter.NewJWTServiceAdapter(config.JWTSecret, config.SigningKey)
 	googleVerifier := adapter.NewHTTPGoogleTokenVerifier(config.GoogleClientID)
 	roleResolver := adapter.NewSQLRoleResolverAdapter(appDB)
 	planResolver := adapter.NewSQLPlanResolverAdapter(appDB)
