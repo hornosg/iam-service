@@ -100,8 +100,21 @@ la que sí necesita (el JWKS lo consumen herramientas Go, agentes y frontends aj
      momento los tokens `kid` viejo se rechazan.
 - Kong consume PEM estático por credencial (§e): en una rotación, la credencial de
   `iam-service-consumer` se re-templatiza con la pública nueva y se hace rebuild+recreate en el
-  mismo paso "publicar→firmar". **No hay dual de borde en rotación**: la ventana la cubre el
-  hecho de que el cambio de credencial y el cambio de firmador son el mismo deploy.
+  mismo paso "publicar→firmar". **No hay dual de borde en rotación** (misma restricción que el
+  cutover, §e: `cache_key = { key }` es unique — no pueden coexistir dos credenciales con el
+  mismo `key: iam-service` y distinto algoritmo).
+- **Costo real de rotar sin dual de borde (declarado, no asumido).** El flip de credencial y de
+  firmador en el mismo deploy sólo cubre los tokens **nuevos**: los tokens `kid1` **no
+  expirados** emitidos antes del flip dan **401 en el borde** al instante (Kong tiene una sola
+  pública, la nueva), igual que en el cutover de §f. El golpe es el mismo 401→refresh ya
+  aceptado: el cliente pega al refresh edge-público (token opaco, lookup en DB) y recibe un
+  token `kid2` sin re-login. No es un hueco de seguridad — es el costo de no tener dual de
+  borde, y hay que declararlo para que T8 no simule una rotación cuyo costo real nadie escribió.
+- **Consecuencia para T8**: el criterio (a) de T8 ("token `kid1` → 200 durante el solapamiento")
+  **sólo es realizable in-process o contra consumidores JWKS**, nunca contra un endpoint gateado
+  por Kong (que ya flippeó a la pública nueva). T8(a) queda **re-alcanceado a verificación
+  in-process**; el borde en rotación se comporta como el cutover (401→refresh), no como
+  solapamiento.
 - El simulacro de T8 ejercita este ciclo completo contra un entorno descartable.
 
 ### (d) Forma del JWKS
@@ -177,6 +190,19 @@ irrealizable para los tokens vivos **por diseño del plugin**, no por decisión 
 Se rechaza y el cutover del borde es un **flip único de credencial** (§f).
 
 ### (f) Estrategia de cutover dual — anclada al TTL de 15 min
+
+**Regla de selección dual (in-process, durante la ventana).** Con dos métodos aceptados, el
+verificador elige por el header del token, nunca por intento y error:
+
+| `alg` del header | Clave de verificación |
+|---|---|
+| `HS256` | **sólo** el secreto viejo (`JWT_SECRET`) |
+| `RS256` | la pública por `kid` (keyring del JWKS) |
+| `none` / cualquier otro | **rechazo** |
+
+**Jamás** se usa la pública RSA como secreto HMAC (confusión RS/HS): un token `HS256` firmado
+con la pública tratada como secreto debe fallar. Los tests negativos de confusión ya están
+exigidos en T3/T4; esta regla es la especificación que esos tests verifican, no redundancia.
 
 1. **Preparación** (T2–T4): par de claves generado, firmador RS256+kid (`Sign`), y los tres
    verificadores in-process con **aceptación dual** (HS256 con el secreto viejo Y RS256 por
