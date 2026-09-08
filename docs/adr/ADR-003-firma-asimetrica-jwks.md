@@ -1,6 +1,6 @@
 # ADR-003: Firma asimétrica RS256 + JWKS para tokens de usuario
 
-**Estado**: Propuesto (pendiente `@dev-security GO` + `Owner GO` — gate L4)
+**Estado**: Aprobado (gate L4 cerrado 2026-09-08 — `Owner GO` + `@dev-security GO` condicionado, condiciones cerradas por `ACC-E03` T1b; ver `management/escalations/2026-09-08_ACC-E03-T1-signoff.md`)
 **Fecha**: 2026-09-07
 **Deciders**: @dev-architect, @dev-security (obligatorio — `PLAT-PROP-013` §Decisiones de diseño), owner (sign-off)
 **Épica**: `ACC-E03` (Firma asimétrica + JWKS) · **Corrige**: `PLAT-E14` T3 (mismo `JWT_SECRET` IAM↔Kong)
@@ -279,6 +279,10 @@ firmador.
 > Estos checkboxes los marca el gate, no el autor del ADR. Sin ambos marcados, T1 NO está
 > aprobada y las tareas que dependen de ella no pueden ejecutarse (`[~]` = hecho, esperando firma).
 
-- [ ] **@dev-security GO** — algoritmo (RS256, EdDSA descartado con motivo), `kid`/rotación,
+- [x] **@dev-security GO** — algoritmo (RS256, EdDSA descartado con motivo), `kid`/rotación,
   forma del JWKS, cómo verifica Kong (restricción probada contra el binario) y cutover.
-- [ ] **Owner GO** — decisión de firma de la raíz de confianza del lab.
+  *GO condicionado otorgado 2026-09-08 (escalación `2026-09-08_ACC-E03-T1-signoff.md`); las dos
+  condiciones — costo de rotar sin dual de borde en §c y regla de selección dual en §f — fueron
+  cerradas por T1b (`ACC-E03`) y verificadas contra este archivo.*
+- [x] **Owner GO** — decisión de firma de la raíz de confianza del lab.
+  *APROBADO 2026-09-08 (escalación `2026-09-08_ACC-E03-T1-signoff.md`, nota del owner).*
