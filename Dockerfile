@@ -36,7 +36,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
     -ldflags='-w -s -extldflags "-static"' \
     -a -installsuffix cgo \
     -trimpath \
-    -o iam-service ./src/main.go
+    -o iam-service ./src
 
 # Verify binary (skip on ARM64 Mac)
 # RUN file iam-service && \

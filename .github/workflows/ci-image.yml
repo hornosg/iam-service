@@ -7,11 +7,10 @@
 # target: production selecciona el stage distroless del Dockerfile (mismo stage que deploy.yml
 # usaba para DOCR) — no development/deps.
 #
-# Caveat (PLAT-E35 T3, 2026-09-05): este caller referencia un workflow reusable de OTRO repo
-# (hornosg/notifications) vía `uses: hornosg/notifications/...@main`. GitHub Actions resuelve esa
-# ruta contra el repo remoto real, no contra el working tree local — y el repo notifications
-# todavía no tiene ese archivo pusheado (su git está en .git_disabled, ver PLAT-E35 T2 caveat).
-# Mientras eso no se resuelva, este workflow no puede ejecutar en GitHub aunque el YAML sea válido.
+# Estado (PLAT-E35, 2026-09-14): el reusable ya está publicado en hornosg/notifications@main.
+# GO_PRIVATE_TOKEN NO hace falta para iam-service: no depende de ningún módulo privado
+# (go-shared es público; mercadocercano/* no aparece en go.sum). Verificado con un build
+# `--target production` sin token. Si algún día entra un módulo privado, hay que configurarlo.
 name: Image — build + scan + push (GHCR)
 
 on:
