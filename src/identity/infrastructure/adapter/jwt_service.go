@@ -106,7 +106,21 @@ func (s *JWTServiceAdapter) keyFunc(t *jwt.Token) (interface{}, error) {
 // access, que mantiene su parse MapClaims propio). Es la misma keyring que el
 // keyFunc de arriba — la rotación (T8) agrega entradas acá una sola vez.
 // Devuelve false si el kid es desconocido o retirado: fail-closed.
+//
+// ACC-E03 T4b — el receptor nil tolera el nil (forma 2 del contrato de la
+// tarea). Motivo: router.go declara `var signingVerifier *adapter.JWTServiceAdapter`
+// y lo pasa como PublicKeyResolver también con identity desmontado; un puntero
+// nil dentro de una interfaz no es nil, el guard `publicKeys == nil` del gate
+// no dispara y sin este guard acá el método desreferencia el nil → panic que
+// gin.Recovery convierte en 500 por request. Se cierra EN la única función que
+// puede desreferenciar (y no en el wiring) porque el fail-closed declarado del
+// gate no debe depender de que cada call site futuro convierta bien su nil:
+// hoy el wiring pasa el typed nil, mañana cualquier otro podría. Con el guard,
+// ese estado es fail-closed igual que un kid desconocido.
 func (s *JWTServiceAdapter) PublicKeyFor(kid string) (*rsa.PublicKey, bool) {
+	if s == nil {
+		return nil, false
+	}
 	pub, ok := s.publicKeys[kid]
 	return pub, ok
 }
