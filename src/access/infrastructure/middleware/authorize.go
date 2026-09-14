@@ -1,6 +1,9 @@
 package middleware
 
 import (
+	"crypto/rsa"
+	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -12,19 +15,37 @@ import (
 	sharedctx "github.com/hornosg/iam-service/src/shared/context"
 )
 
+// PublicKeyResolver entrega la(s) pública(s) RSA activa(s) por kid (ACC-E03
+// T4, ADR-003 §f). Es un puerto del gate hacia la keyring del firmador dual:
+// la implementación vive en identity (JWTServiceAdapter.PublicKeyFor) y llega
+// por wiring en router.go — access no importa el dominio de identity. Un nil
+// (o un kid desconocido) es fail-closed: el branch RS256 no verifica.
+type PublicKeyResolver interface {
+	PublicKeyFor(kid string) (*rsa.PublicKey, bool)
+}
+
+// dualAcceptedMethods es el doble control del keyFunc dual de Authorize
+// (espejo del adapter): WithValidMethods hace que el parser rechace alg fuera
+// de {HS256, RS256} ANTES de pedir la clave.
+var dualAcceptedMethods = []string{jwt.SigningMethodHS256.Alg(), jwt.SigningMethodRS256.Alg()}
+
 // ScopeMiddlewareFactory crea middlewares que requieren scopes S2S específicos.
 type ScopeMiddlewareFactory struct {
-	jwtSecret string
-	namespace string
-	registry  *s2s.Registry
+	jwtSecret  string
+	namespace  string
+	registry   *s2s.Registry
+	publicKeys PublicKeyResolver
 }
 
 // NewScopeMiddlewareFactory construye la factory usando el registry cargado al boot.
-func NewScopeMiddlewareFactory(jwtSecret, namespace string, registry *s2s.Registry) *ScopeMiddlewareFactory {
+// publicKeys es la keyring de verificación RS256 (T4): nil sólo cuando identity
+// está desmontado (no hay login → no hay tokens RS256 que verificar).
+func NewScopeMiddlewareFactory(jwtSecret, namespace string, registry *s2s.Registry, publicKeys PublicKeyResolver) *ScopeMiddlewareFactory {
 	return &ScopeMiddlewareFactory{
-		jwtSecret: jwtSecret,
-		namespace: namespace,
-		registry:  registry,
+		jwtSecret:  jwtSecret,
+		namespace:  namespace,
+		registry:   registry,
+		publicKeys: publicKeys,
 	}
 }
 
@@ -38,7 +59,7 @@ func (f *ScopeMiddlewareFactory) RequireScope(requiredScope s2s.Scope, allowedRo
 // grupos de rutas que deben aceptar servicios con distintos privilegios (ej.
 // tenant-scoped: system:admin o tenant:admin).
 func (f *ScopeMiddlewareFactory) RequireScopes(requiredScopes []s2s.Scope, allowedRoles ...string) gin.HandlerFunc {
-	return Authorize(f.jwtSecret, f.namespace, f.registry, requiredScopes, allowedRoles...)
+	return Authorize(f.jwtSecret, f.namespace, f.registry, f.publicKeys, requiredScopes, allowedRoles...)
 }
 
 // Authorize es el gate de acceso a los endpoints de gestión del IAM (tenants,
@@ -62,7 +83,7 @@ func (f *ScopeMiddlewareFactory) RequireScopes(requiredScopes []s2s.Scope, allow
 // responsabilidad de la capa de repositorio (filtro tenant_id, RULE-04), NO de
 // este gate: un token system_admin / de servicio con system:admin es cross-tenant
 // por diseño.
-func Authorize(jwtSecret, namespace string, registry *s2s.Registry, requiredScopes []s2s.Scope, allowedRoles ...string) gin.HandlerFunc {
+func Authorize(jwtSecret, namespace string, registry *s2s.Registry, publicKeys PublicKeyResolver, requiredScopes []s2s.Scope, allowedRoles ...string) gin.HandlerFunc {
 	allowed := make(map[string]struct{}, len(allowedRoles))
 	for _, r := range allowedRoles {
 		allowed[r] = struct{}{}
@@ -105,12 +126,40 @@ func Authorize(jwtSecret, namespace string, registry *s2s.Registry, requiredScop
 			return
 		}
 
+		// ACC-E03 T4: keyFunc dual según la regla de selección de ADR-003 §f —
+		//
+		//	alg HS256 → sólo el secreto viejo    alg RS256 → la pública por kid
+		//	alg none / cualquier otro → rechazo
+		//
+		// La rama HMAC devuelve únicamente el secreto legacy, nunca material
+		// de la clave pública: un token HS256 "firmado" con el PEM público como
+		// secreto cae en la rama HS256, se verifica contra el secreto viejo y
+		// falla (confusión RS/HS cerrada). El guard de secreto vacío replica el
+		// de C2 del gate de T3 (defensa en profundidad sobre el boot).
 		claims := jwt.MapClaims{}
-		_, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (interface{}, error) {
-			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, jwt.ErrSignatureInvalid
+		_, err := jwt.NewParser(jwt.WithValidMethods(dualAcceptedMethods)).ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (interface{}, error) {
+			switch t.Method.Alg() {
+			case jwt.SigningMethodHS256.Alg():
+				if jwtSecret == "" {
+					return nil, errors.New("token HS256 rechazado: secreto legacy no configurado")
+				}
+				return []byte(jwtSecret), nil
+			case jwt.SigningMethodRS256.Alg():
+				if publicKeys == nil {
+					return nil, errors.New("token RS256 rechazado: keyring no configurada")
+				}
+				kid, _ := t.Header["kid"].(string)
+				if kid == "" {
+					return nil, errors.New("token RS256 sin kid en el header")
+				}
+				pub, ok := publicKeys.PublicKeyFor(kid)
+				if !ok {
+					return nil, fmt.Errorf("kid desconocido o retirado: %s", kid)
+				}
+				return pub, nil
+			default:
+				return nil, fmt.Errorf("método de firma no aceptado: %v", t.Header["alg"])
 			}
-			return []byte(jwtSecret), nil
 		})
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token"})

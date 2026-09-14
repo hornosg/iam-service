@@ -52,7 +52,7 @@ func newRouter(t *testing.T) (*gin.Engine, *map[string]bool) {
 		"sales":          salesKey,
 		"whatsapp-agent": whatsappKey,
 	})
-	factory := authmw.NewScopeMiddlewareFactory(testJWTSecret, testNamespace, registry)
+	factory := authmw.NewScopeMiddlewareFactory(testJWTSecret, testNamespace, registry, nil)
 
 	report := map[string]bool{}
 	reportFlag := func(c *gin.Context) {

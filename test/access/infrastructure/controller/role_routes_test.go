@@ -56,7 +56,7 @@ func newRolesRouter(t *testing.T) (*gin.Engine, *rolerepo.MockRoleRepository) {
 
 	// Registry S2S vacío: en estos tests autorizamos sólo por JWT.
 	registry := s2s.LoadFromEnvForTests(map[string]string{})
-	authFactory := authmw.NewScopeMiddlewareFactory(routesTestSecret, routesTestNS, registry)
+	authFactory := authmw.NewScopeMiddlewareFactory(routesTestSecret, routesTestNS, registry, nil)
 
 	apiV1 := router.Group("/api/v1")
 	adminGroup := apiV1.Group("", authFactory.RequireScope(s2s.ScopeSystemAdmin, "system_admin"))

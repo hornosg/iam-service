@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/hornosg/iam-service/src/identity/infrastructure/adapter"
 	"github.com/hornosg/iam-service/src/identity/infrastructure/config"
 )
 
@@ -34,8 +35,9 @@ func TestAuthModule_ValidateRouteNoExiste(t *testing.T) {
 
 	testSecret := "test-secret-0123456789abcdef" // fixture, no secreto real
 
-	authRepoApp := config.SetupTokenRevocationGate(apiV1, nil, nil, testSecret)
-	config.SetupAuthModule(apiV1, nil, nil, authRepoApp, nil, nil, nil, config.AuthModuleConfig{
+	jwtSvc := adapter.NewJWTServiceAdapter(testSecret, nil) // verificador dual fixture (ACC-E03 T4)
+	authRepoApp := config.SetupTokenRevocationGate(apiV1, nil, nil, jwtSvc)
+	config.SetupAuthModule(apiV1, nil, nil, authRepoApp, nil, nil, nil, jwtSvc, config.AuthModuleConfig{
 		JWTSecret:          testSecret,
 		AccessTokenExpiry:  15 * time.Minute,
 		RefreshTokenExpiry: 7 * 24 * time.Hour,

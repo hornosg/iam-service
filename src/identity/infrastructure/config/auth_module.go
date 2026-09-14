@@ -113,7 +113,7 @@ func SetupTokenRevocationGate(
 	router *gin.RouterGroup,
 	appDB *sql.DB,
 	loginDB *sql.DB,
-	jwtSecret string,
+	jwtService port.JWTService,
 ) port.AuthRepository {
 	authRepoApp := repository.NewPostgresAuthRepository(appDB)
 
@@ -124,7 +124,9 @@ func SetupTokenRevocationGate(
 	tenantResolver := adapter.NewPostgresTenantResolver(loginDB)
 
 	router.Use(authmw.TokenRevocationCheck(authmw.TokenRevocationConfig{
-		JWTSecret:      jwtSecret,
+		// ACC-E03 T4: el gate verifica con la MISMA instancia dual del
+		// firmador (RS256 por kid + HS256 legacy en la ventana de cutover).
+		JWT:            jwtService,
 		AuthRepo:       authRepoApp,
 		TenantResolver: tenantResolver,
 		ExcludedRoutes: []string{
@@ -151,6 +153,7 @@ func SetupAuthModule(
 	userService port.UserService,
 	loginUserService port.UserService,
 	tenantService port.TenantService,
+	jwtService port.JWTService,
 	config AuthModuleConfig,
 ) {
 	// Crear configuración para casos de uso
@@ -171,7 +174,9 @@ func SetupAuthModule(
 	// ACC-E03 T3: el firmador firma RS256+kid (nil en dev sin clave → Sign
 	// falla explícito) y verifica con aceptación dual: HS256 con el secreto
 	// viejo hasta que T6 lo retire, RS256 por kid del header (ADR-003 §f).
-	jwtService := adapter.NewJWTServiceAdapter(config.JWTSecret, config.SigningKey)
+	// ACC-E03 T4: la instancia YA NO se crea acá — llega compartida desde
+	// buildRouter, que la pasó también al gate de revocación (mismo keyFunc
+	// para firmador, revocación y —vía PublicKeyFor— el gate authorize).
 	googleVerifier := adapter.NewHTTPGoogleTokenVerifier(config.GoogleClientID)
 	roleResolver := adapter.NewSQLRoleResolverAdapter(appDB)
 	planResolver := adapter.NewSQLPlanResolverAdapter(appDB)

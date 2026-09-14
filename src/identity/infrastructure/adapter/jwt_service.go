@@ -78,6 +78,13 @@ func (s *JWTServiceAdapter) Sign(claims *value_object.TokenClaims) (string, erro
 func (s *JWTServiceAdapter) keyFunc(t *jwt.Token) (interface{}, error) {
 	switch t.Method.Alg() {
 	case jwt.SigningMethodHS256.Alg():
+		// C2 del gate L4 de T3: un secreto vacío NO verifica. Sin el guard,
+		// un token HS256 "firmado" con secreto vacío pasaría acá. Defensa en
+		// profundidad sobre el ValidateJWTSecret del boot (que ya es fatal en
+		// release): el guard vive también en el keyFunc, no sólo en el boot.
+		if s.legacySecret == "" {
+			return nil, errors.New("token HS256 rechazado: secreto legacy no configurado")
+		}
 		return []byte(s.legacySecret), nil
 	case jwt.SigningMethodRS256.Alg():
 		kid, _ := t.Header["kid"].(string)
@@ -92,6 +99,16 @@ func (s *JWTServiceAdapter) keyFunc(t *jwt.Token) (interface{}, error) {
 	default:
 		return nil, fmt.Errorf("método de firma no aceptado: %v", t.Header["alg"])
 	}
+}
+
+// PublicKeyFor entrega la pública RSA activa por kid para los verificadores
+// que no parsean a través de este adapter (ACC-E03 T4: el gate `authorize` de
+// access, que mantiene su parse MapClaims propio). Es la misma keyring que el
+// keyFunc de arriba — la rotación (T8) agrega entradas acá una sola vez.
+// Devuelve false si el kid es desconocido o retirado: fail-closed.
+func (s *JWTServiceAdapter) PublicKeyFor(kid string) (*rsa.PublicKey, bool) {
+	pub, ok := s.publicKeys[kid]
+	return pub, ok
 }
 
 // dualAcceptedMethods es el doble control del keyFunc: WithValidMethods hace

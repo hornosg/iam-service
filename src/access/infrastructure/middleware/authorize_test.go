@@ -158,7 +158,7 @@ func TestAuthorize(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
 			c, engine := gin.CreateTestContext(w)
-			engine.Use(Authorize(testKey, testNS, testRegistry(t), []s2s.Scope{tc.scope}, tc.allowed...))
+			engine.Use(Authorize(testKey, testNS, testRegistry(t), nil, []s2s.Scope{tc.scope}, tc.allowed...))
 			engine.GET("/x", func(c *gin.Context) {
 				if tc.wantS2S {
 					if s, _ := c.Get("s2s"); s != true {
@@ -186,7 +186,7 @@ func TestAuthorize(t *testing.T) {
 // TestRequireScopeFactory verifica el helper factory para no repetir argumentos.
 func TestRequireScopeFactory(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	f := NewScopeMiddlewareFactory(testKey, testNS, testRegistry(t))
+	f := NewScopeMiddlewareFactory(testKey, testNS, testRegistry(t), nil)
 
 	w := httptest.NewRecorder()
 	c, engine := gin.CreateTestContext(w)

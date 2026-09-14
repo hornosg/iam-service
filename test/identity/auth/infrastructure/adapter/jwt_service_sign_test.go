@@ -144,8 +144,12 @@ func TestJWTServiceParseRejectsAlgNone(t *testing.T) {
 	require.NoError(t, err)
 
 	for name, parse := range map[string]func(string) (*value_object.TokenClaims, error){
-		"Parse":              func(s string) (*value_object.TokenClaims, error) { return adapter.NewJWTServiceAdapter(testLegacySecret, key).Parse(s) },
-		"ParseIgnoringExpiry": func(s string) (*value_object.TokenClaims, error) { return adapter.NewJWTServiceAdapter(testLegacySecret, key).ParseIgnoringExpiry(s) },
+		"Parse": func(s string) (*value_object.TokenClaims, error) {
+			return adapter.NewJWTServiceAdapter(testLegacySecret, key).Parse(s)
+		},
+		"ParseIgnoringExpiry": func(s string) (*value_object.TokenClaims, error) {
+			return adapter.NewJWTServiceAdapter(testLegacySecret, key).ParseIgnoringExpiry(s)
+		},
 	} {
 		parsed, err := parse(unsigned)
 		assert.Error(t, err, "%s debe rechazar alg:none", name)
@@ -203,4 +207,22 @@ func TestJWTServiceParseRejectsRS256WithoutKID(t *testing.T) {
 	parsed, err := svc.Parse(token)
 	assert.Error(t, err, "RS256 sin kid no es seleccionable por la regla dual §f")
 	assert.Nil(t, parsed)
+}
+
+// ACC-E03 T4 — C2 del gate L4 de T3, adelantado en T4 (defensa en
+// profundidad): la rama HS256 del keyFunc rechaza cuando el secreto legacy
+// está vacío — un token HS256 "firmado" con secreto vacío NO verifica, ni
+// aunque el boot sea dev (donde ValidateJWTSecret sólo advierte).
+func TestJWTServiceParseRejectsHS256WithEmptyLegacySecret(t *testing.T) {
+	key, _ := newSigningFixture(t)
+	svc := adapter.NewJWTServiceAdapter("", key) // sin secreto legacy configurado
+	claims := validTestClaims()
+
+	// Firmado con secreto VACÍO: sin el guard, verificaría.
+	emptySecretToken, err := jwt.NewWithClaims(jwt.SigningMethodHS256, adapter.JWTClaims{TokenClaims: claims}).SignedString([]byte(""))
+	require.NoError(t, err)
+
+	parsed, err := svc.Parse(emptySecretToken)
+	require.Error(t, err, "con secreto legacy vacío, un token HS256 firmado con secreto vacío NO debe verificar (C2 del gate de T3)")
+	assert.Nil(t, parsed, "el parse rechazado no devuelve claims")
 }

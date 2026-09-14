@@ -6,19 +6,26 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	sharedservice "github.com/hornosg/go-shared/domain/service"
 	httpresp "github.com/hornosg/go-shared/infrastructure/response"
 
 	"github.com/hornosg/iam-service/src/identity/domain/port"
-	"github.com/hornosg/iam-service/src/identity/infrastructure/adapter"
+	"github.com/hornosg/iam-service/src/identity/domain/value_object"
 	sharedctx "github.com/hornosg/iam-service/src/shared/context"
 )
 
 type TokenRevocationConfig struct {
-	JWTSecret string
-	AuthRepo  port.AuthRepository
+	// JWT verifica la firma del Bearer con la MISMA instancia dual del
+	// firmador (ACC-E03 T4, ADR-003 §f): RS256 por kid con la pública +
+	// HS256 con el secreto viejo sólo durante la ventana de cutover. Jamás
+	// `alg:none`, jamás confusión RS/HS — la selección es la del keyFunc del
+	// adapter, cuya especificación viven los tests negativos de T3/T4. Un nil
+	// acá NO es configurable: el wiring lo pasa siempre (fail-closed si
+	// faltara — el parse de un token nil-adapter no compila, pero el guard
+	// explícito abajo evita el panic y deja el request sin autenticar).
+	JWT      port.JWTService
+	AuthRepo port.AuthRepository
 	// TenantResolver resuelve el tenant de un token legacy sin claim de
 	// tenant (ACC-E02 T8g, criterio (B) del gate de T8f): a partir del
 	// user_id YA verificado, sobre el pool de login. Opcional: nil desactiva
@@ -49,20 +56,21 @@ func TokenRevocationCheck(cfg TokenRevocationConfig) gin.HandlerFunc {
 			return
 		}
 
-		jwtClaims := &adapter.JWTClaims{}
-		token, err := jwt.ParseWithClaims(tokenStr, jwtClaims, func(token *jwt.Token) (interface{}, error) {
-			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, jwt.ErrSignatureInvalid
+		// ACC-E03 T4: el parse lo hace el verificador dual del firmador (misma
+		// instancia, misma regla §f). Si cfg.JWT es nil el gate queda
+		// fail-closed: no se puede verificar el token, no se autentica.
+		var claims *value_object.TokenClaims
+		if cfg.JWT != nil {
+			parsed, err := cfg.JWT.Parse(tokenStr)
+			if err != nil {
+				c.Next()
+				return
 			}
-			return []byte(cfg.JWTSecret), nil
-		})
-
-		if err != nil || !token.Valid {
+			claims = parsed
+		} else {
 			c.Next()
 			return
 		}
-
-		claims := &jwtClaims.TokenClaims
 		c.Set("user_id", claims.UserID)
 		c.Set("token_claims", claims)
 

@@ -166,12 +166,23 @@ func buildRouter(appDB *sql.DB, loginDB *sql.DB) *gin.Engine {
 	// /roles y /plans hasta la expiración por tiempo del access token.
 	// Devuelve el repo de auth sobre account_app que comparte con SetupAuthModule.
 	// ACC-E01 T7: parte del módulo identity — se monta con él.
+	//
+	// ACC-E03 T4: la config (que carga la clave de firma) y el verificador dual
+	// se crean ANTES del gate de revocación, para que firmador, gate de
+	// revocación y gate authorize (vía PublicKeyFor) compartan UNA sola
+	// instancia y UNA keyring — la rotación (T8) agrega la clave en gracia una
+	// sola vez. El orden con respecto a los grupos es el de T8g: el gate se
+	// registra sobre apiV1 antes de crear los grupos de gestión.
 	var authRepoApp port.AuthRepository
+	var authConfig config.AuthModuleConfig
+	var signingVerifier *adapter.JWTServiceAdapter
 	if !disabled["identity"] {
-		authRepoApp = config.SetupTokenRevocationGate(apiV1, appDB, loginDB, jwtSecret)
+		authConfig = config.NewAuthModuleConfigFromEnv()
+		signingVerifier = adapter.NewJWTServiceAdapter(authConfig.JWTSecret, authConfig.SigningKey)
+		authRepoApp = config.SetupTokenRevocationGate(apiV1, appDB, loginDB, signingVerifier)
 	}
 
-	authFactory := authmw.NewScopeMiddlewareFactory(jwtSecret, serviceNamespace, s2sRegistry)
+	authFactory := authmw.NewScopeMiddlewareFactory(jwtSecret, serviceNamespace, s2sRegistry, signingVerifier)
 	adminGroup := apiV1.Group("", authFactory.RequireScope(s2s.ScopeSystemAdmin, "system_admin"))
 	tenantScopedGroup := apiV1.Group("", authFactory.RequireScopes([]s2s.Scope{s2s.ScopeSystemAdmin, s2s.ScopeTenantAdmin}, "tenant_admin", "system_admin"))
 
@@ -207,8 +218,10 @@ func buildRouter(appDB *sql.DB, loginDB *sql.DB) *gin.Engine {
 		loginUserRepo := userRepo.NewPostgresUserRepository(loginDB)
 		loginUserFinder := userUC.NewUserFinderUseCase(loginUserRepo)
 		tenantService := adapter.NewTenantFeaturesAdapter(tenantFeaturesUC)
-		authConfig := config.NewAuthModuleConfigFromEnv()
-		config.SetupAuthModule(apiV1, appDB, loginDB, authRepoApp, userFinderService, loginUserFinder, tenantService, authConfig)
+		// ACC-E03 T4: authConfig y signingVerifier ya se crearon arriba (antes
+		// del gate de revocación); acá se reutilizan — una sola carga de clave
+		// y un solo verificador dual en el proceso.
+		config.SetupAuthModule(apiV1, appDB, loginDB, authRepoApp, userFinderService, loginUserFinder, tenantService, signingVerifier, authConfig)
 	}
 
 	// 5. Plan Module (independiente)

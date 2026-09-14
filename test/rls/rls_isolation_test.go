@@ -183,9 +183,10 @@ func newTestRLSServer(t *testing.T) *testRLSServer {
 	// ACC-E02 T8g (criterio (a)): el gate de revocación se registra sobre apiV1
 	// ANTES de crear los grupos de gestión — Gin congela la cadena de handlers al
 	// crear el grupo, y un Use() posterior sobre el padre no los alcanza.
-	authRepoApp := authconfig.SetupTokenRevocationGate(apiV1, appDB, loginDB, testJWTSecret)
+	jwtSvc := adapter.NewJWTServiceAdapter(testJWTSecret, nil) // verificador dual fixture (ACC-E03 T4)
+	authRepoApp := authconfig.SetupTokenRevocationGate(apiV1, appDB, loginDB, jwtSvc)
 
-	authFactory := authmw.NewScopeMiddlewareFactory(testJWTSecret, testNamespace, s2sRegistry)
+	authFactory := authmw.NewScopeMiddlewareFactory(testJWTSecret, testNamespace, s2sRegistry, nil)
 	adminGroup := apiV1.Group("", authFactory.RequireScope(s2s.ScopeSystemAdmin, "system_admin"))
 	tenantScopedGroup := apiV1.Group("", authFactory.RequireScopes([]s2s.Scope{s2s.ScopeSystemAdmin, s2s.ScopeTenantAdmin}, "tenant_admin", "system_admin"))
 
@@ -203,7 +204,7 @@ func newTestRLSServer(t *testing.T) *testRLSServer {
 		RefreshTokenExpiry: 7 * 24 * time.Hour,
 		Namespace:          testNamespace,
 	}
-	authconfig.SetupAuthModule(apiV1, appDB, loginDB, authRepoApp, userFinderService, loginUserFinder, tenantService, authCfg)
+	authconfig.SetupAuthModule(apiV1, appDB, loginDB, authRepoApp, userFinderService, loginUserFinder, tenantService, jwtSvc, authCfg)
 
 	planconfig.SetupPlanModule(adminGroup, appDB)
 	roleconfig.SetupRoleModule(tenantScopedGroup, adminGroup, appDB)
