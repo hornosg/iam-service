@@ -206,3 +206,48 @@ jobs:
             echo ""
             echo "Check hexagonal versionado (test/arch/arch_test.go): ports fuera de domain/, regla de dependencia domain/application, libs de infra en domain/application. Corre con -count=1 (sin cache) en cada push/PR."
           } | tee -a "$GITHUB_STEP_SUMMARY"
+
+  # ACC-E04.T10 — check de unicidad de la tabla `tenants` (absorbe PLAT-E34 T7): la
+  # identidad del tenant vive en UNA base del lab (iam_db). scripts/check-tenants-unique.sh
+  # cuenta las definiciones `CREATE TABLE ... tenants` en las migraciones de
+  # account-service + servicios MC y falla si son != 1.
+  #
+  # Job separado y SIEMPRE (como `architecture`): la amenaza no es diff-local — un
+  # servicio MC nuevo con su propia tabla `tenants` no tocaría el diff de
+  # account-service y el job de tests afectados no lo vería.
+  #
+  # Para poder escanear los servicios MC, el job clona los repos de la org
+  # mercadocercano (shallow) y apunta MC_SERVICES_DIR ahí. Fail-closed en dos capas:
+  # si la API no devuelve repos o algún clone falla, este step corta el build — y el
+  # script, a su vez, corta con exit 2 si el alcance queda vacío (menos alcance no es
+  # un pass, es "no miré").
+  tenants-unique:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Clonar servicios MC (scope del check)
+        env:
+          GH_TOKEN: ${{ secrets.GO_PRIVATE_TOKEN }}
+        run: |
+          mkdir -p "$HOME/mc-services"
+          repos="$(curl -sf --retry 3 -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/orgs/mercadocercano/repos?per_page=100" | jq -r '.[].name')"
+          if [ -z "${repos}" ]; then
+            echo "La API de GitHub no devolvió repos de la org mercadocercano — fail-closed."
+            exit 1
+          fi
+          while read -r repo; do
+            [ -n "${repo}" ] || continue
+            git clone --quiet --depth 1 \
+              "https://x-access-token:${GH_TOKEN}@github.com/mercadocercano/${repo}.git" \
+              "$HOME/mc-services/${repo}" || {
+                echo "No se pudo clonar ${repo} — el check no puede prometer alcance completo."
+                exit 1
+              }
+          done <<< "${repos}"
+
+      - name: Check — una sola tabla tenants en el lab
+        run: MC_SERVICES_DIR="$HOME/mc-services" ./scripts/check-tenants-unique.sh
