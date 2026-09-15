@@ -1,7 +1,7 @@
 # ADR-005: Tenancy — contrato S2S del read de config, fuente única de stock policy y namespace de producto
 
 **Estado**: Propuesto (pendiente `@dev-security GO` + `Owner GO` — gate L4)
-**Fecha**: 2026-09-07
+**Fecha**: 2026-09-07 · **Enmendado 2026-09-15** (T1b: paso 0 de exclusión de middleware + corrección de rate-limiting)
 **Deciders**: @dev-architect, @dev-security (obligatorio — `ACC-E04` es L4), owner (sign-off, `D-12`)
 **Épica**: `ACC-E04` T1 — las tres decisiones DD-1/DD-2/DD-3 que el resto de la épica ejecuta.
 **Supera coordenadas de**: `ACC-E04-tenancy-absorber-tenant-config.md` §Decisiones de diseño (premisas re-verificadas hoy; dos estaban podridas — ver §Contexto, hallazgos H1 y H2).
@@ -85,6 +85,66 @@ de mercado-cercano. (3) **DD-3**: el product-namespace **ya existe** (migración
 
 ---
 
+## Paso 0 (T4) — exclusión de las rutas de config del middleware global
+
+> **Enmienda T1b (2026-09-15)**, originada en el gate del 2026-09-08 y persistida por el gate del
+> 2026-09-15 (`management/escalations/2026-09-15_ACC-E04-T1-signoff.md`): el runtime ejecuta un
+> paso previo que este ADR no conocía y que mata el contrato de DD-1 **antes** de que empiece.
+> La exclusión de middleware que acá se declara es una **decisión de seguridad** (criterio (c) de
+> T1): queda escrita en el diseño, no la decide ad hoc quien ejecute T4.
+
+**Hecho verificado en disco (2026-09-15):**
+
+- `src/router.go:53-83` monta `TenantValidation` (go-shared v0.17.0) **global**, con
+  `ExcludedRoutes` en :56-65: `/health`, `/api/v1/health`, `/metrics`, `/api/v1/auth/*`,
+  `/api/v1/tenants*`, `/api/v1/users*`, `/api/v1/roles*`, `/api/v1/plans*`.
+- El matching de exclusiones es **por prefijo** (`go-shared/infrastructure/middleware/
+  tenant_validation.go:151-162`): route con `*` → `HasPrefix(path, prefijo-trimmed)`; sin `*` →
+  igualdad exacta. El prefijo `/api/v1/tenants` exige la `s`: `/api/v1/tenant/config` y
+  `/api/v1/tenant/bootstrap` (singular) **no matchean ninguna exclusión**.
+- **Negativa de runtime (2026-09-15, servicio vivo en :8080, ruta aún sin registrar — el
+  middleware global corre también sobre paths sin route):**
+  `curl -w %{http_code} http://localhost:8080/api/v1/tenant/config/catalog.stock_policy`
+  → **401** `{"error":"Authorization header required"}` (`tenant_validation.go:57`), con o sin
+  `X-API-Key`. El request S2S —el contrato que DD-1 crea— muere **antes** del gate `Authorize`.
+- **Positiva y negativa de diseño (tests scratch contra go-shared v0.17.0 real, 2026-09-15):**
+  con `"/api/v1/tenant/config*"` en `ExcludedRoutes`, el mismo request **sin** `Authorization`
+  pasa el middleware y llega al handler (donde el único control es el gate `Authorize`); en
+  cambio una exclusión de **match exacto** (`"/api/v1/tenant/config"`, sin wildcard) **no cubre**
+  el read `/api/v1/tenant/config/:key` — `path == route` falla y el 401 sobrevive. La exclusión
+  correcta es **con wildcard**.
+
+**Decisión (paso 0 de T4):** T4 agrega a `ExcludedRoutes` (`router.go:56-65`) exactamente:
+
+```go
+"/api/v1/tenant/config*",    // GET read /:key + POST set (DD-1) — wildcard: el read lleva :key
+"/api/v1/tenant/bootstrap*", // POST bootstrap S2S (DD-1)
+```
+
+con este motivo, escrito **antes** de que T4 toque código:
+
+1. Las tres rutas de config (read, set, bootstrap) son **S2S** (o S2S+humano con rol declarado):
+   su control es el gate `Authorize` (ADR-002), no la presencia de un JWT de usuario.
+   `TenantValidation` exige `Authorization` en la línea :57 y responde 401 a todo request sin
+   JWT — una contradicción directa con el contrato S2S, no una capa adicional de defensa.
+2. La exclusión **no abre un agujero**: la superficie queda controlada fail-closed por
+   `Authorize` (sin key → 401, key sin scope → 403), el guard `uuid.Nil` (→ 400), y RLS en la
+   TX del repo (0 filas sin GUC). El primer control efectivo sobre la ruta pasa a ser
+   `Authorize` — exactamente el mecanismo que ADR-002 diseñó para S2S.
+3. Alcance cerrado: **sólo** los dos prefijos de config. Se descarta el wildcard genérico
+   `/api/v1/tenant*`: excluiría en masa el espacio `tenant/` (presente y futuro) de un
+   middleware de seguridad sin que cada ruta pase por revisión. Cada ruta futura bajo
+   `tenant/` vuelve a requerir su propia decisión de exclusión.
+4. La **escritura humano** (`POST /api/v1/tenant/config`, rol `tenant_admin`) queda excluida
+   por la misma contradicción y su verificación de JWT la hace `Authorize` (firma + claims +
+   rol con `allowedRoles`) — el mismo mecanismo del resto de las rutas humanas del servicio.
+   No hay path sin gate: sin credencial válida, 401/403 de `Authorize`.
+5. T4 re-verifica en runtime la secuencia completa: sin exclusión → 401 (ya probado acá);
+   con exclusión + ruta registrada, request sin credencial → 401 **de `Authorize`**, y con
+   credencial `config:read` válida → respuesta del gated-escape (criterio (b) de T1b).
+
+---
+
 ## DD-1 · Contrato de lectura de config S2S bajo RLS
 
 ### Contexto específico
@@ -154,6 +214,55 @@ borde como anónimo y **el gate real es el in-process** (`Authorize` existe exac
 fallback anónimo de Kong dejaba pasar requests sin token — `authorize.go:44-47`). Con o sin Kong,
 el control es el mismo. El timeout agresivo (500ms), el cache con TTL y el fallback
 `REQUIRE_STOCK` viven en el cliente (T5 los conserva; son su dominio, no el del servicio).
+
+**Control de borde: rate-limiting (corrección T1b, 2026-09-15).** La versión anterior de este
+ADR cerraba su lista de fuera-de-scope apoyándose en un supuesto rate-limiting service-level de
+Kong sin citar plugin, config ni ubicación: una afirmación vaga e inverificable tal como estaba
+escrita, que el gate marcó falsa ("el service `iam-service` no tiene el plugin"). Re-verificado hoy contra el template **y** contra el runtime
+(Kong Admin `:8001`): **el control existe**, pero no donde el reviewer lo buscó — está declarado
+en el array top-level de plugins con referencia al service, el mismo idioma con el que este ADR
+ya describía el jwt+acl del service:
+
+```yaml
+# kong.yml.template:1290-1296 (bloque commiteado en HEAD; idéntico en runtime 2026-09-15)
+- name: rate-limiting
+  service: iam-service
+  config:
+    minute: 60
+    hour: 1000
+    policy: local
+```
+
+Runtime: `GET :8001/plugins?name=rate-limiting` → plugin sobre el service `iam-service`
+(`a6a5adfb-…`): `minute: 60, hour: 1000, policy: local, limit_by: consumer`. La premisa del
+reviewer era falsa **por dónde miró**: inspeccionó los plugins inline del bloque del service; en
+Kong declarativo, un plugin top-level con `service:` **es** service-level. La afirmación vieja
+queda eliminada de este ADR (verificable: cero hits del literal) y reemplazada por esta cita
+verificada contra template y runtime.
+
+**Condición de `policy: local`** (objeción 3 del gate de T1b, 2026-09-15): el contador del plugin vive
+en cada nodo de Kong. Es correcto con el Kong single-node del lab; si Kong escala a más de un nodo, el límite
+efectivo se multiplica por la cantidad de nodos y el plugin tiene que pasar a `policy: redis` (ya usada en
+otras rutas del template) o equivalente.
+
+Dos propiedades de ese plugin que este ADR deja explícitas:
+
+- **Fuerza bruta contra `X-API-Key` acotada en el borde**: `limit_by: consumer` + el fallback
+  `anonymous-consumer` del jwt significa que todo el tráfico S2S anónimo del service comparte
+  **un** bucket de 60/min → ≤60 intentos/min de adivinar la key para TODO el tráfico anónimo.
+  La key es de alta entropía y `Lookup` es constant-time (sin filtro por timing): el riesgo de
+  enumeración queda despreciable.
+- **Bucket compartido = 429 en tormenta**: un atacante puede quemar el bucket anónimo (60/min)
+  y causar 429 al tráfico S2S legítimo — propiedad **preexistente** de todo `iam-service`
+  anónimo, no introducida por la ruta de config. El cutover a un límite route-level dedicado
+  (patrón de los routes catalog-flip, `kong.yml.template:634-638`) queda como decisión explícita
+  del trigger de volumen en §Revisión prevista — no se adelanta acá.
+
+Decisión: el control de borde de la ruta de config es **este** plugin service-level. **No se
+agrega un plugin nuevo en esta épica**: un segundo `rate-limiting` con la misma config sobre la
+ruta no cambia ninguna propiedad (el límite efectivo ya es el mínimo de los dos); si lo que se
+quiere es un límite distinto (route-level con `limit_by: ip`), eso es el cutover del trigger, no
+una tarea de esta épica.
 
 **Por qué no es `USING(true)` encubierto** (criterio (c) de T1, para la revisión de seguridad): el
 escape acota a **un** tenant por request, elegido por el llamador, y **sólo** después de una
@@ -340,7 +449,9 @@ Con la elección de (i), 2 y 3 ya no comparten ni valor ni dueño.
   épica de MC que retire `tenant_config` de `tenant-service`.
 - 🚫 Fuera de scope: migrar a MC su admin de config; renombrar `tenant-service` (`PLAT-E34` T8);
   mTLS/JWT S2S (evolución de ADR-002); unificar namespace de token y de producto (sólo `ACC-E07`);
-  rate-limiting específico del read (el service-level de Kong aplica).
+  rate-limiting adicional sobre la ruta de config (el control de borde service-level existe y
+  está citado con evidencia en DD-1 §Control de borde; un límite route-level dedicado es el
+  cutover del trigger de volumen de §Revisión prevista, no trabajo de esta épica).
 
 ## Revisión prevista
 
@@ -353,6 +464,11 @@ Con la elección de (i), 2 y 3 ya no comparten ni valor ni dueño.
   de DD-2; el check negativo de T6 se relaja recién cuando la columna deje de existir.
 - **Si el volumen del read de config deja de justificar el cache del BFF** (o el TTL se vuelve un
   problema de frescura): revisar la forma del contrato (p. ej. `ETag`/`If-None-Match`), no el gate.
+- **Si el volumen S2S crece** (segundo consumidor, `ACC-E07`) o el bucket compartido de 60/min
+  genera 429 en producción: agregar `rate-limiting` route-level dedicado a la ruta de config
+  (`limit_by: ip` o bucket propio, patrón catalog-flip) — decisión de borde en Kong, no de
+  contrato. También re-evaluar entonces si el `429` merece un caso distinto en el cliente (T5
+  hoy lo trata como `unexpected status`).
 
 ## Firmas (gate L4 — `ACC-E04` T1)
 
