@@ -28,6 +28,16 @@ type MockUserRepository struct {
 	shouldFail    bool
 	failOnMethods map[string]bool
 	callHistory   map[string]int
+	lastCriteria  criteria.Criteria
+}
+
+// GetLastCriteria retorna el último criteria recibido por SearchByCriteria
+// (ACC-E08 T3 QA: oráculo del control de tenant forzado por el handler — el
+// filtro tenant_id que llega al repo debe venir del header, no del query).
+func (r *MockUserRepository) GetLastCriteria() criteria.Criteria {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.lastCriteria
 }
 
 // NewMockUserRepository crea una nueva instancia del mock
@@ -426,6 +436,7 @@ func (r *MockUserRepository) SearchByCriteria(ctx context.Context, crit criteria
 	defer r.mu.RUnlock()
 
 	r.incrementCallCount("SearchByCriteria")
+	r.lastCriteria = crit
 
 	if r.shouldMethodFail("SearchByCriteria") {
 		return nil, ErrMockFailedOp
