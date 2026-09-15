@@ -1,0 +1,212 @@
+{
+  "service": "iam-service",
+  "module": "iam",
+  "purpose": "Punto de partida REAL de la campana de cobertura total ACC-E08 (post-mudanza ACC-E01, post-commits ACC-E03/E04 aterrizados). Umbral de referencia para el piso de total que T8 agrega a CI y para el criterio monotonico de T2-T6 (la campana solo sube). Mecanismo distinto del gate de diff-coverage: coverage_percent=80 de coverage-baseline.json NO se toca.",
+  "measured_at": "2026-09-15",
+  "coverage_total_percent": 61.2,
+  "statements_covered": 1183,
+  "statements_total": 1932,
+  "command": "GOWORK=off go test -count=1 -timeout 300s -coverpkg=./src/... -coverprofile=c.out ./test/... && go tool cover -func=c.out | tail -1",
+  "reproducibility": "Dos corridas el 2026-09-15: 61.2% y 61.2% (idénticas; la varianza de startRevocationCleanup no se manifestó). Per-paquete deduplicado por bloque del coverprofile (bloques duplicados, uno por binario de test: un bloque cuenta cubierto si ALGÚN binario lo ejecutó).",
+  "per_package": [
+    {
+      "package": "github.com/hornosg/iam-service/src/access/application/request",
+      "covered": 1,
+      "total": 1,
+      "percent": 100.0
+    },
+    {
+      "package": "github.com/hornosg/iam-service/src/access/application/response",
+      "covered": 5,
+      "total": 5,
+      "percent": 100.0
+    },
+    {
+      "package": "github.com/hornosg/iam-service/src/access/application/usecase",
+      "covered": 66,
+      "total": 79,
+      "percent": 83.5
+    },
+    {
+      "package": "github.com/hornosg/iam-service/src/access/domain/entity",
+      "covered": 24,
+      "total": 24,
+      "percent": 100.0
+    },
+    {
+      "package": "github.com/hornosg/iam-service/src/access/domain/value_object",
+      "covered": 12,
+      "total": 12,
+      "percent": 100.0
+    },
+    {
+      "package": "github.com/hornosg/iam-service/src/access/infrastructure/controller",
+      "covered": 32,
+      "total": 71,
+      "percent": 45.1
+    },
+    {
+      "package": "github.com/hornosg/iam-service/src/access/infrastructure/criteria",
+      "covered": 13,
+      "total": 15,
+      "percent": 86.7
+    },
+    {
+      "package": "github.com/hornosg/iam-service/src/access/infrastructure/middleware",
+      "covered": 81,
+      "total": 93,
+      "percent": 87.1
+    },
+    {
+      "package": "github.com/hornosg/iam-service/src/access/infrastructure/s2s",
+      "covered": 37,
+      "total": 37,
+      "percent": 100.0
+    },
+    {
+      "package": "github.com/hornosg/iam-service/src/identity/application/request",
+      "covered": 21,
+      "total": 26,
+      "percent": 80.8
+    },
+    {
+      "package": "github.com/hornosg/iam-service/src/identity/application/response",
+      "covered": 7,
+      "total": 7,
+      "percent": 100.0
+    },
+    {
+      "package": "github.com/hornosg/iam-service/src/identity/application/usecase",
+      "covered": 210,
+      "total": 258,
+      "percent": 81.4
+    },
+    {
+      "package": "github.com/hornosg/iam-service/src/identity/domain/entity",
+      "covered": 21,
+      "total": 22,
+      "percent": 95.5
+    },
+    {
+      "package": "github.com/hornosg/iam-service/src/identity/domain/value_object",
+      "covered": 35,
+      "total": 37,
+      "percent": 94.6
+    },
+    {
+      "package": "github.com/hornosg/iam-service/src/identity/infrastructure/adapter",
+      "covered": 42,
+      "total": 102,
+      "percent": 41.2
+    },
+    {
+      "package": "github.com/hornosg/iam-service/src/identity/infrastructure/config",
+      "covered": 53,
+      "total": 111,
+      "percent": 47.7
+    },
+    {
+      "package": "github.com/hornosg/iam-service/src/identity/infrastructure/controller",
+      "covered": 7,
+      "total": 164,
+      "percent": 4.3
+    },
+    {
+      "package": "github.com/hornosg/iam-service/src/identity/infrastructure/criteria",
+      "covered": 0,
+      "total": 53,
+      "percent": 0.0
+    },
+    {
+      "package": "github.com/hornosg/iam-service/src/identity/infrastructure/logging",
+      "covered": 12,
+      "total": 12,
+      "percent": 100.0
+    },
+    {
+      "package": "github.com/hornosg/iam-service/src/identity/infrastructure/middleware",
+      "covered": 48,
+      "total": 50,
+      "percent": 96.0
+    },
+    {
+      "package": "github.com/hornosg/iam-service/src/identity/infrastructure/persistence/repository",
+      "covered": 68,
+      "total": 284,
+      "percent": 23.9
+    },
+    {
+      "package": "github.com/hornosg/iam-service/src/plans/application/request",
+      "covered": 1,
+      "total": 1,
+      "percent": 100.0
+    },
+    {
+      "package": "github.com/hornosg/iam-service/src/plans/application/response",
+      "covered": 5,
+      "total": 5,
+      "percent": 100.0
+    },
+    {
+      "package": "github.com/hornosg/iam-service/src/plans/application/usecase",
+      "covered": 33,
+      "total": 42,
+      "percent": 78.6
+    },
+    {
+      "package": "github.com/hornosg/iam-service/src/plans/domain/entity",
+      "covered": 29,
+      "total": 34,
+      "percent": 85.3
+    },
+    {
+      "package": "github.com/hornosg/iam-service/src/plans/domain/value_object",
+      "covered": 25,
+      "total": 26,
+      "percent": 96.2
+    },
+    {
+      "package": "github.com/hornosg/iam-service/src/shared/context",
+      "covered": 9,
+      "total": 14,
+      "percent": 64.3
+    },
+    {
+      "package": "github.com/hornosg/iam-service/src/shared/postgres",
+      "covered": 28,
+      "total": 50,
+      "percent": 56.0
+    },
+    {
+      "package": "github.com/hornosg/iam-service/src/tenancy/application/request",
+      "covered": 7,
+      "total": 11,
+      "percent": 63.6
+    },
+    {
+      "package": "github.com/hornosg/iam-service/src/tenancy/application/response",
+      "covered": 5,
+      "total": 6,
+      "percent": 83.3
+    },
+    {
+      "package": "github.com/hornosg/iam-service/src/tenancy/application/usecase",
+      "covered": 143,
+      "total": 170,
+      "percent": 84.1
+    },
+    {
+      "package": "github.com/hornosg/iam-service/src/tenancy/domain/entity",
+      "covered": 67,
+      "total": 73,
+      "percent": 91.8
+    },
+    {
+      "package": "github.com/hornosg/iam-service/src/tenancy/domain/value_object",
+      "covered": 36,
+      "total": 37,
+      "percent": 97.3
+    }
+  ],
+  "notes": "Tres números distintos, los tres reales y no contradictorios: (1) 80.4 (2026-08-28, PLAT-E21 T9) = total del árbol pre-mudanza de ese día; (2) 73.2 (2026-09-04, test-baseline.json de ACC-E01 T2) = comparable pre-mudanza, congelado ANTES de ACC-E01 T4; (3) 59.9 (2026-09-08, mapa de brechas de ACC-E08) = canónico post-mudanza contra 9fc7778. Por qué 59.9 canónico ≠ 73.2 comparable (D-09 de ACC-E01 T4): la mudanza a los seis módulos NO perdió cobertura, creció el denominador — el merge de paquetes hace que el test de rutas de auth linkee 4 archivos de infra de user que antes nadie linkeaba desde ./test/... Por qué este archivo registra 61.2 y no los 59.9 del mapa: el mapa fue medido contra 9fc7778 y desde entonces aterrizaron 5 commits de ACC-E03 (94e5604, fb4ff8c, d8ce6ec, 5bbc6f2, f59115c) con tests nuevos — identity/infrastructure/adapter subió 11.6→41.2 y identity/infrastructure/config 33.3→47.8 — y el denominador creció 1851→1932 (código nuevo de ACC-E03/E04, p.ej. access/infrastructure/s2s, 37 statements al 100%). La épica lo anticipa: los porcentajes del mapa caducan con cada merge, la medición viva manda sobre la tabla. Congelar el número vivo (y no el 59.9 viejo) hace que el criterio monotonico de T2-T6 sea honesto: un baseline congelado abajo daría un piso permisivo. Caveat de -coverpkg=./src/...: los tests viven en el árbol externo test/; sin ese flag el mismo árbol reporta ~10% (falso, ver coverage-baseline.json). go test ./... verde (0 FAIL) al momento de congelar."
+}
