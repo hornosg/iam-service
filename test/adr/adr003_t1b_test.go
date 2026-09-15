@@ -258,7 +258,10 @@ func TestContratoT1bCondicion4KidPresente(t *testing.T) {
 // verificador acepta un ADR que no cumple.
 
 // TestNegativoT1bRechazaADRSinCostoDeclarado: borrada la sección §c (donde
-// vive hoy la declaración del costo), el verificador debe rechazar.
+// vive hoy la declaración del costo), el verificador debe rechazar. Con T5a
+// en el ADR el control también vive en el addendum (mecánica de rotación de
+// flota): la mutación corta AMBAS secciones — si sólo se cortara §c, el
+// negativo dejaría de reproducir el "control ausente" que verifica.
 func TestNegativoT1bRechazaADRSinCostoDeclarado(t *testing.T) {
 	adr := adrText(t)
 	i := strings.Index(adr, "### (c)")
@@ -267,6 +270,15 @@ func TestNegativoT1bRechazaADRSinCostoDeclarado(t *testing.T) {
 		t.Fatalf("no se pudo aislar §c para mutar (i=%d j=%d): revisar estructura del ADR", i, j)
 	}
 	mutado := adr[:i] + adr[j:]
+	// Cortar también el addendum de T5a (rev. 2), que re-declara el costo con
+	// la misma co-ocurrencia (kid1 + 401 + "sin dual de borde") en su §C.
+	// El addendum va seguido de la sección de firmas de T1: se conserva.
+	if k := strings.Index(mutado, "## Addendum — Verificadores de flota"); k >= 0 {
+		fin := strings.Index(mutado[k:], "## Firmas (gate L4")
+		if fin > 0 {
+			mutado = mutado[:k] + mutado[k+fin:]
+		}
+	}
 	if err := verificarCostoRotacion(mutado); err == nil {
 		t.Errorf("el verificador de costo de rotación ACEPTÓ un ADR sin la declaración de §c — un test que nunca falla no prueba nada")
 	}
