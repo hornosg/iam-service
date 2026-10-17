@@ -28,6 +28,7 @@ import (
 	"github.com/hornosg/iam-service/src/identity/domain/port"
 	"github.com/hornosg/iam-service/src/identity/infrastructure/adapter"
 	"github.com/hornosg/iam-service/src/identity/infrastructure/config"
+	identityctl "github.com/hornosg/iam-service/src/identity/infrastructure/controller"
 	authmw "github.com/hornosg/iam-service/src/access/infrastructure/middleware"
 	"github.com/hornosg/iam-service/src/access/infrastructure/s2s"
 	planConfig "github.com/hornosg/iam-service/src/plans/infrastructure/config"
@@ -56,6 +57,8 @@ func buildRouter(appDB *sql.DB, loginDB *sql.DB) *gin.Engine {
 			"/health",
 			"/api/v1/health",
 			"/metrics",
+			// ACC-E03 T7: JWKS público (ADR-003 §d) — material público, sin JWT.
+			identityctl.JWKSPath,
 			"/api/v1/auth/*",
 			"/api/v1/tenants*",
 			"/api/v1/users*",
@@ -184,6 +187,10 @@ func buildRouter(appDB *sql.DB, loginDB *sql.DB) *gin.Engine {
 	if !disabled["identity"] {
 		authConfig = config.NewAuthModuleConfigFromEnv()
 		signingVerifier = adapter.NewJWTServiceAdapter(authConfig.SigningKey)
+		// ACC-E03 T7: JWKS público en la raíz (fuera de /api/v1, sin gate de
+		// revocación ni authorize). Publica la keyring de ESTE verificador, así
+		// lo que se publica es exactamente lo que se acepta (ADR-003 §c/§d).
+		router.GET(identityctl.JWKSPath, identityctl.JWKSHandler(signingVerifier))
 		authRepoApp = config.SetupTokenRevocationGate(apiV1, appDB, loginDB, signingVerifier)
 	}
 
