@@ -3,12 +3,13 @@ package usecase
 import (
 	"context"
 
+	sharedport "github.com/hornosg/go-shared/domain/port"
 	"github.com/hornosg/iam-service/src/tenancy/application/request"
 	"github.com/hornosg/iam-service/src/tenancy/application/response"
 	"github.com/hornosg/iam-service/src/tenancy/domain/entity"
 	"github.com/hornosg/iam-service/src/tenancy/domain/exception"
 	"github.com/hornosg/iam-service/src/tenancy/domain/port"
-	sharedport "github.com/hornosg/go-shared/domain/port"
+	"github.com/hornosg/iam-service/src/tenancy/domain/value_object"
 )
 
 type CreateTenantUseCase struct {
@@ -24,6 +25,11 @@ func NewCreateTenantUseCase(tenantRepo port.TenantRepository, metrics sharedport
 }
 
 func (uc *CreateTenantUseCase) Execute(ctx context.Context, req *request.CreateTenantRequest) (*response.TenantResponse, error) {
+	namespace, err := value_object.ResolveProductNamespace(req.Namespace)
+	if err != nil {
+		return nil, err
+	}
+
 	// Obtener tipo de tenant
 	tenantType, err := req.GetTenantType()
 	if err != nil {
@@ -39,8 +45,9 @@ func (uc *CreateTenantUseCase) Execute(ctx context.Context, req *request.CreateT
 	// Normalizar slug
 	normalizedSlug := req.GetNormalizedSlug()
 
-	// Verificar que no existe un tenant con el mismo slug
-	exists, err := uc.tenantRepo.ExistsBySlug(ctx, normalizedSlug)
+	// Precheck acotado por RLS; UNIQUE(namespace, slug) en Create es la autoridad
+	// final (el caller provision no puede leer otros tenants). No ampliar permisos.
+	exists, err := uc.tenantRepo.ExistsBySlug(ctx, namespace, normalizedSlug)
 	if err != nil {
 		return nil, err
 	}
@@ -62,6 +69,7 @@ func (uc *CreateTenantUseCase) Execute(ctx context.Context, req *request.CreateT
 
 	// Crear la entidad
 	tenant := entity.NewTenant(req.Name, normalizedSlug, req.Description, tenantType, ownerID)
+	tenant.Namespace = namespace
 
 	// Establecer dominio personalizado si se proporciona
 	if normalizedDomain != "" {

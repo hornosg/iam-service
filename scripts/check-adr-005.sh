@@ -19,6 +19,9 @@
 #   (b)  REPORT-ONLY: el veredicto @dev-security + owner es el gate humano de la
 #        fase REVIEW; este check sólo verifica que el registro del proceso existe
 #        (escalación + bitácora) y reporta el estado de las firmas.
+#   (d)  Enmienda 2026-10-15: contratos JSON normativos, acotados a sus secciones
+#        de DD-1: bootstrap insert-only y auditoría/sink/límites. Python stdlib;
+#        no prueba concurrencia DB, emisión runtime ni entrega remota a Loki.
 #
 # Uso:
 #   bash scripts/check-adr-005.sh               # verifica el ADR real
@@ -183,7 +186,8 @@ self_test() {
   # con $tmp ya fuera de scope (set -u lo toma como unbound)
   trap 'rm -rf "$tmp"' RETURN
 
-  # Fixture OK: satisface TODO el contrato → debe pasar
+  # Fixture OK: satisface el contrato legado (a/a'/a''/c) → debe pasar.
+  # Los dos contratos de enmienda se verifican aparte al final de --self-test.
   cat > "$tmp/ok.md" <<'EOF'
 # ADR fixture OK
 ## Decisión
@@ -262,12 +266,18 @@ EOF
 
 main() {
   if [[ "${1:-}" == "--self-test" ]]; then
-    self_test
+    self_test || return $?
+    python3 "$REPO_ROOT/scripts/check_adr_005_remediation.py" --self-test "$DEFAULT_ADR"
     return $?
   fi
   local adr="${1:-$DEFAULT_ADR}"
   FAILURES=0
   verificar_adr "$adr"
+  if python3 "$REPO_ROOT/scripts/check_adr_005_remediation.py" "$adr"; then
+    pass "(d) contratos documentales de bootstrap/auditoría satisfechos"
+  else
+    fail "(d) enmienda bootstrap/auditoría ausente o divergente"
+  fi
   report_proceso "$adr"
   echo "----------------------------------------"
   if (( FAILURES == 0 )); then

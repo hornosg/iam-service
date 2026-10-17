@@ -10,7 +10,8 @@ import (
 type Tenant struct {
 	ID           uuid.UUID
 	Name         string
-	Slug         string // Identificador único para URLs
+	Slug         string // Identificador único dentro del namespace de producto
+	Namespace    string // No es el namespace del JWT (SERVICE_NAMESPACE)
 	Description  string
 	Type         value_object.TenantType
 	Status       value_object.TenantStatus
@@ -32,6 +33,7 @@ func NewTenant(name, slug, description string, tenantType value_object.TenantTyp
 		ID:          uuid.New(),
 		Name:        name,
 		Slug:        slug,
+		Namespace:   value_object.DefaultProductNamespace,
 		Description: description,
 		Type:        tenantType,
 		Status:      value_object.TenantStatusActive,

@@ -23,7 +23,7 @@ var (
 type MockTenantRepository struct {
 	mu            sync.RWMutex
 	tenants       map[uuid.UUID]*entity.Tenant
-	slugIndex     map[string]uuid.UUID
+	slugIndex     map[[2]string]uuid.UUID
 	domainIndex   map[string]uuid.UUID
 	shouldFail    bool
 	failOnMethods map[string]bool
@@ -34,7 +34,7 @@ type MockTenantRepository struct {
 func NewMockTenantRepository() *MockTenantRepository {
 	return &MockTenantRepository{
 		tenants:       make(map[uuid.UUID]*entity.Tenant),
-		slugIndex:     make(map[string]uuid.UUID),
+		slugIndex:     make(map[[2]string]uuid.UUID),
 		domainIndex:   make(map[string]uuid.UUID),
 		failOnMethods: make(map[string]bool),
 		callHistory:   make(map[string]int),
@@ -82,13 +82,13 @@ func (r *MockTenantRepository) SetupTenants(tenants []*entity.Tenant) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.tenants = make(map[uuid.UUID]*entity.Tenant)
-	r.slugIndex = make(map[string]uuid.UUID)
+	r.slugIndex = make(map[[2]string]uuid.UUID)
 	r.domainIndex = make(map[string]uuid.UUID)
 
 	for _, tenant := range tenants {
 		clonedTenant := r.cloneTenant(tenant)
 		r.tenants[tenant.ID] = clonedTenant
-		r.slugIndex[tenant.Slug] = tenant.ID
+		r.slugIndex[[2]string{tenant.Namespace, tenant.Slug}] = tenant.ID
 		if tenant.Domain != "" {
 			r.domainIndex[tenant.Domain] = tenant.ID
 		}
@@ -154,6 +154,7 @@ func (r *MockTenantRepository) cloneTenant(tenant *entity.Tenant) *entity.Tenant
 		ID:           tenant.ID,
 		Name:         tenant.Name,
 		Slug:         tenant.Slug,
+		Namespace:    tenant.Namespace,
 		Description:  tenant.Description,
 		Type:         tenant.Type,
 		Status:       tenant.Status,
@@ -182,7 +183,7 @@ func (r *MockTenantRepository) Create(ctx context.Context, tenant *entity.Tenant
 		return ErrMockFailedOp
 	}
 
-	if _, exists := r.slugIndex[tenant.Slug]; exists {
+	if _, exists := r.slugIndex[[2]string{tenant.Namespace, tenant.Slug}]; exists {
 		return ErrMockTenantDuplicated
 	}
 
@@ -192,7 +193,7 @@ func (r *MockTenantRepository) Create(ctx context.Context, tenant *entity.Tenant
 
 	clonedTenant := r.cloneTenant(tenant)
 	r.tenants[tenant.ID] = clonedTenant
-	r.slugIndex[tenant.Slug] = tenant.ID
+	r.slugIndex[[2]string{tenant.Namespace, tenant.Slug}] = tenant.ID
 	if tenant.Domain != "" {
 		r.domainIndex[tenant.Domain] = tenant.ID
 	}
@@ -220,7 +221,7 @@ func (r *MockTenantRepository) GetByID(ctx context.Context, id uuid.UUID) (*enti
 }
 
 // GetBySlug implementa la interfaz del repositorio
-func (r *MockTenantRepository) GetBySlug(ctx context.Context, slug string) (*entity.Tenant, error) {
+func (r *MockTenantRepository) GetBySlug(ctx context.Context, namespace, slug string) (*entity.Tenant, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -230,7 +231,7 @@ func (r *MockTenantRepository) GetBySlug(ctx context.Context, slug string) (*ent
 		return nil, ErrMockFailedOp
 	}
 
-	tenantID, exists := r.slugIndex[slug]
+	tenantID, exists := r.slugIndex[[2]string{namespace, slug}]
 	if !exists {
 		return nil, ErrMockTenantNotFound
 	}
@@ -466,7 +467,7 @@ func (r *MockTenantRepository) List(ctx context.Context, limit, offset int) ([]*
 }
 
 // ExistsBySlug implementa la interfaz del repositorio
-func (r *MockTenantRepository) ExistsBySlug(ctx context.Context, slug string) (bool, error) {
+func (r *MockTenantRepository) ExistsBySlug(ctx context.Context, namespace, slug string) (bool, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -476,7 +477,7 @@ func (r *MockTenantRepository) ExistsBySlug(ctx context.Context, slug string) (b
 		return false, ErrMockFailedOp
 	}
 
-	_, exists := r.slugIndex[slug]
+	_, exists := r.slugIndex[[2]string{namespace, slug}]
 	return exists, nil
 }
 

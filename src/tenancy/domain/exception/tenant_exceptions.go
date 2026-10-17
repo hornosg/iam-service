@@ -3,6 +3,7 @@ package exception
 import "errors"
 
 var (
+	ErrInvalidNamespace    = errors.New("invalid product namespace")
 	ErrTenantNotFound      = errors.New("tenant not found")
 	ErrTenantAlreadyExists = errors.New("tenant already exists")
 	ErrSlugAlreadyExists   = errors.New("tenant slug already exists")

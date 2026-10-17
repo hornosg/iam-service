@@ -12,7 +12,7 @@ type TenantRepository interface {
 	// CRUD básico
 	Create(ctx context.Context, tenant *entity.Tenant) error
 	GetByID(ctx context.Context, id uuid.UUID) (*entity.Tenant, error)
-	GetBySlug(ctx context.Context, slug string) (*entity.Tenant, error)
+	GetBySlug(ctx context.Context, namespace, slug string) (*entity.Tenant, error)
 	GetByDomain(ctx context.Context, domain string) (*entity.Tenant, error)
 	Update(ctx context.Context, tenant *entity.Tenant) error
 	Delete(ctx context.Context, id uuid.UUID) error
@@ -27,7 +27,7 @@ type TenantRepository interface {
 	List(ctx context.Context, limit, offset int) ([]*entity.Tenant, error)
 
 	// Verificaciones
-	ExistsBySlug(ctx context.Context, slug string) (bool, error)
+	ExistsBySlug(ctx context.Context, namespace, slug string) (bool, error)
 	ExistsByDomain(ctx context.Context, domain string) (bool, error)
 	Count(ctx context.Context) (int, error)
 	CountByStatus(ctx context.Context, status value_object.TenantStatus) (int, error)

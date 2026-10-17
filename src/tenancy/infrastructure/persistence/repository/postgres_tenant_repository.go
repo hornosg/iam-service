@@ -89,9 +89,9 @@ func (r *PostgresTenantRepository) Create(ctx context.Context, tenant *entity.Te
 			INSERT INTO tenants (
 				id, name, slug, description, type, status, owner_id, domain,
 				plan_id, user_count, max_users, settings, features, expires_at,
-				created_at, updated_at
+				created_at, updated_at, namespace
 			)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
 		`
 
 		settingsJSON, err := json.Marshal(tenant.Settings)
@@ -123,6 +123,7 @@ func (r *PostgresTenantRepository) Create(ctx context.Context, tenant *entity.Te
 			tenant.ExpiresAt,
 			tenant.CreatedAt,
 			tenant.UpdatedAt,
+			tenant.Namespace,
 		)
 
 		if err != nil {
@@ -130,9 +131,9 @@ func (r *PostgresTenantRepository) Create(ctx context.Context, tenant *entity.Te
 			if pqErr, ok := err.(*pq.Error); ok {
 				if pqErr.Code == "23505" {
 					switch pqErr.Constraint {
-					case "tenants_slug_unique":
+					case "tenants_namespace_slug_unique":
 						return exception.ErrSlugAlreadyExists
-					case "tenants_domain_unique":
+					case "tenants_domain_key":
 						return exception.ErrDomainAlreadyExists
 					}
 				}
@@ -151,7 +152,7 @@ func (r *PostgresTenantRepository) GetByID(ctx context.Context, id uuid.UUID) (*
 		query := `
 			SELECT id, name, slug, description, type, status, owner_id, domain,
 			       plan_id, user_count, max_users, settings, features, expires_at,
-			       created_at, updated_at
+			       created_at, updated_at, namespace
 			FROM tenants
 			WHERE id = $1
 		`
@@ -162,17 +163,17 @@ func (r *PostgresTenantRepository) GetByID(ctx context.Context, id uuid.UUID) (*
 }
 
 // GetBySlug obtiene un tenant por su slug
-func (r *PostgresTenantRepository) GetBySlug(ctx context.Context, slug string) (*entity.Tenant, error) {
+func (r *PostgresTenantRepository) GetBySlug(ctx context.Context, namespace, slug string) (*entity.Tenant, error) {
 	return withRLS(ctx, r.db, func(ctx context.Context, q querier) (*entity.Tenant, error) {
 		query := `
 			SELECT id, name, slug, description, type, status, owner_id, domain,
 			       plan_id, user_count, max_users, settings, features, expires_at,
-			       created_at, updated_at
+			       created_at, updated_at, namespace
 			FROM tenants
-			WHERE slug = $1
+			WHERE namespace = $1 AND slug = $2
 		`
 
-		row := q.QueryRowContext(ctx, query, slug)
+		row := q.QueryRowContext(ctx, query, namespace, slug)
 		return r.scanTenant(row)
 	})
 }
@@ -183,7 +184,7 @@ func (r *PostgresTenantRepository) GetByDomain(ctx context.Context, domain strin
 		query := `
 			SELECT id, name, slug, description, type, status, owner_id, domain,
 			       plan_id, user_count, max_users, settings, features, expires_at,
-			       created_at, updated_at
+			       created_at, updated_at, namespace
 			FROM tenants
 			WHERE domain = $1
 		`
@@ -235,7 +236,7 @@ func (r *PostgresTenantRepository) Update(ctx context.Context, tenant *entity.Te
 		if err != nil {
 			// Verificar errores de constraint únicos
 			if pqErr, ok := err.(*pq.Error); ok {
-				if pqErr.Code == "23505" && pqErr.Constraint == "tenants_domain_unique" {
+				if pqErr.Code == "23505" && pqErr.Constraint == "tenants_domain_key" {
 					return struct{}{}, exception.ErrDomainAlreadyExists
 				}
 			}
@@ -290,7 +291,7 @@ func (r *PostgresTenantRepository) List(ctx context.Context, limit, offset int) 
 		query := `
 			SELECT id, name, slug, description, type, status, owner_id, domain,
 			       plan_id, user_count, max_users, settings, features, expires_at,
-			       created_at, updated_at
+			       created_at, updated_at, namespace
 			FROM tenants
 			ORDER BY created_at DESC
 			LIMIT $1 OFFSET $2
@@ -312,7 +313,7 @@ func (r *PostgresTenantRepository) GetByOwner(ctx context.Context, ownerID uuid.
 		query := `
 			SELECT id, name, slug, description, type, status, owner_id, domain,
 			       plan_id, user_count, max_users, settings, features, expires_at,
-			       created_at, updated_at
+			       created_at, updated_at, namespace
 			FROM tenants
 			WHERE owner_id = $1
 			ORDER BY created_at DESC
@@ -334,7 +335,7 @@ func (r *PostgresTenantRepository) GetByStatus(ctx context.Context, status value
 		query := `
 			SELECT id, name, slug, description, type, status, owner_id, domain,
 			       plan_id, user_count, max_users, settings, features, expires_at,
-			       created_at, updated_at
+			       created_at, updated_at, namespace
 			FROM tenants
 			WHERE status = $1
 			ORDER BY created_at DESC
@@ -357,7 +358,7 @@ func (r *PostgresTenantRepository) GetByType(ctx context.Context, tenantType val
 		query := `
 			SELECT id, name, slug, description, type, status, owner_id, domain,
 			       plan_id, user_count, max_users, settings, features, expires_at,
-			       created_at, updated_at
+			       created_at, updated_at, namespace
 			FROM tenants
 			WHERE type = $1
 			ORDER BY created_at DESC
@@ -389,7 +390,7 @@ func (r *PostgresTenantRepository) GetByPlan(ctx context.Context, planID uuid.UU
 		query := `
 			SELECT id, name, slug, description, type, status, owner_id, domain,
 			       plan_id, user_count, max_users, settings, features, expires_at,
-			       created_at, updated_at
+			       created_at, updated_at, namespace
 			FROM tenants
 			WHERE plan_id = $1
 			ORDER BY created_at DESC
@@ -412,7 +413,7 @@ func (r *PostgresTenantRepository) GetActive(ctx context.Context, limit, offset 
 		query := `
 			SELECT id, name, slug, description, type, status, owner_id, domain,
 			       plan_id, user_count, max_users, settings, features, expires_at,
-			       created_at, updated_at
+			       created_at, updated_at, namespace
 			FROM tenants
 			WHERE status = 'ACTIVE'
 			ORDER BY created_at DESC
@@ -435,7 +436,7 @@ func (r *PostgresTenantRepository) GetExpiring(ctx context.Context, days int) ([
 		query := `
 			SELECT id, name, slug, description, type, status, owner_id, domain,
 			       plan_id, user_count, max_users, settings, features, expires_at,
-			       created_at, updated_at
+			       created_at, updated_at, namespace
 			FROM tenants
 			WHERE expires_at IS NOT NULL
 			  AND expires_at <= $1
@@ -455,11 +456,11 @@ func (r *PostgresTenantRepository) GetExpiring(ctx context.Context, days int) ([
 }
 
 // ExistsBySlug verifica si existe un tenant con el slug
-func (r *PostgresTenantRepository) ExistsBySlug(ctx context.Context, slug string) (bool, error) {
+func (r *PostgresTenantRepository) ExistsBySlug(ctx context.Context, namespace, slug string) (bool, error) {
 	return withRLS(ctx, r.db, func(ctx context.Context, q querier) (bool, error) {
-		query := `SELECT 1 FROM tenants WHERE slug = $1`
+		query := `SELECT 1 FROM tenants WHERE namespace = $1 AND slug = $2`
 		var exists int
-		err := q.QueryRowContext(ctx, query, slug).Scan(&exists)
+		err := q.QueryRowContext(ctx, query, namespace, slug).Scan(&exists)
 		if err == sql.ErrNoRows {
 			return false, nil
 		}
@@ -564,6 +565,7 @@ func (r *PostgresTenantRepository) scanTenant(row *sql.Row) (*entity.Tenant, err
 		&expiresAt,
 		&tenant.CreatedAt,
 		&tenant.UpdatedAt,
+		&tenant.Namespace,
 	)
 
 	if err == sql.ErrNoRows {
@@ -650,6 +652,7 @@ func (r *PostgresTenantRepository) scanTenants(rows *sql.Rows) ([]*entity.Tenant
 			&expiresAt,
 			&tenant.CreatedAt,
 			&tenant.UpdatedAt,
+			&tenant.Namespace,
 		)
 
 		if err != nil {
@@ -717,7 +720,7 @@ func (r *PostgresTenantRepository) SearchByCriteria(ctx context.Context, crit cr
 		baseQuery := `
 			SELECT id, name, slug, description, type, status, owner_id, domain,
 			       plan_id, user_count, max_users, settings, features, expires_at,
-			       created_at, updated_at
+			       created_at, updated_at, namespace
 			FROM tenants
 		`
 

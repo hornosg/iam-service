@@ -62,6 +62,13 @@ func buildRouter(appDB *sql.DB, loginDB *sql.DB) *gin.Engine {
 			"/api/v1/users*",
 			"/api/v1/roles*",
 			"/api/v1/plans*",
+			// ADR-005 §Paso 0 (ACC-E04 T4): rutas de config S2S/S2S+humano. Su control
+			// es el gate Authorize (sin key → 401, sin scope → 403), el guard uuid.Nil
+			// (→ 400) y RLS en la TX del repo; TenantValidation exige un JWT de usuario
+			// y mataría el contrato S2S con 401 antes del gate. Wildcard porque el read
+			// lleva :key. Alcance cerrado: NO /api/v1/tenant* genérico.
+			"/api/v1/tenant/config*",    // GET read /:key + POST set (DD-1)
+			"/api/v1/tenant/bootstrap*", // POST bootstrap S2S (DD-1)
 		},
 		OnTenantMismatch: func(userID, jwtTenantID, headerTenantID, ipAddress string) {
 			securityLogger.Log(sharedport.SecurityEvent{
@@ -252,7 +259,27 @@ func buildRouter(appDB *sql.DB, loginDB *sql.DB) *gin.Engine {
 		tenantConfig.SetupTenantProvisionModule(provisionGroup, appDB, metricsRecorder)
 	}
 
+	// 8. Tenant Config Module (ACC-E04 T4, ADR-005 DD-1). Read S2S config:read sin
+	//    allowedRoles (el camino humano no abre en esta ruta); set humano tenant_admin
+	//    sin scopes S2S (una key válida recibe 403); bootstrap S2S tenant:provision.
+	//    La auditoría usa el adapter canónico de producción a stdout (no nil/Discard).
+	if !disabled["tenancy"] {
+		tenantConfig.SetupTenantConfigModule(apiV1, appDB, tenantConfig.TenantConfigGates{
+			Read:      authFactory.RequireScope(s2s.ScopeConfigRead),
+			Set:       authFactory.RequireScopes(nil, "tenant_admin"),
+			Bootstrap: authFactory.RequireScope(s2s.ScopeTenantProvision),
+		}, newConfigAuditEmitter())
+	}
+
 	return router
+}
+
+// newConfigAuditEmitter construye el adapter de auditoría de config de producción:
+// go-shared CanonicalLogger("iam") a stdout → logs Docker → Promtail → Loki
+// (ADR-005 §Auditoría cross-tenant). Variable de paquete sólo para que el test del
+// composition root verifique esta construcción; nada la reemplaza en runtime.
+var newConfigAuditEmitter = func() *sharedlog.CanonicalLogger {
+	return sharedlog.NewCanonicalLogger("iam")
 }
 
 // modulesDisabled parsea la variable de entorno MODULES_DISABLED y devuelve el

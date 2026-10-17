@@ -7,6 +7,7 @@ import (
 
 	sharedport "github.com/hornosg/go-shared/domain/port"
 	"github.com/hornosg/iam-service/src/tenancy/application/usecase"
+	"github.com/hornosg/iam-service/src/tenancy/infrastructure/audit"
 	"github.com/hornosg/iam-service/src/tenancy/infrastructure/controller"
 	"github.com/hornosg/iam-service/src/tenancy/infrastructure/criteria"
 	"github.com/hornosg/iam-service/src/tenancy/infrastructure/persistence/repository"
@@ -86,4 +87,33 @@ func SetupTenantProvisionModule(apiGroup *gin.RouterGroup, db *sql.DB, metricsRe
 		nil,
 	)
 	tenantHandler.RegisterProvisionRoutes(apiGroup)
+}
+
+// TenantConfigGates son los gates Authorize que el composition root (router.go) arma
+// para las rutas de config (ADR-005 DD-1). Llegan como handlers para que tenancy no
+// importe access. Ninguno es opcional: una ruta sin gate quedaría abierta.
+type TenantConfigGates struct {
+	Read      gin.HandlerFunc // S2S config:read, sin allowedRoles
+	Set       gin.HandlerFunc // humano JWT, rol tenant_admin
+	Bootstrap gin.HandlerFunc // S2S tenant:provision
+}
+
+// SetupTenantConfigModule arma el módulo de config key-value (`tenant_config`, ACC-E04 T3)
+// y monta sus rutas (T4) con la cadena exigida por ADR-005: en read y bootstrap, el
+// wrapper de auditoría va ANTES del gate para observar también 401/403. El emitter es el
+// adapter canónico de producción (NewCanonicalLogger → stdout → Promtail/Loki).
+func SetupTenantConfigModule(apiGroup *gin.RouterGroup, db *sql.DB, gates TenantConfigGates, emitter audit.Emitter) *controller.TenantConfigController {
+	if gates.Read == nil || gates.Set == nil || gates.Bootstrap == nil {
+		panic("SetupTenantConfigModule: los tres gates de config son obligatorios (ADR-005 DD-1)")
+	}
+	configRepo := repository.NewPostgresTenantConfigRepository(db)
+	getConfigUseCase := usecase.NewGetTenantConfigUseCase(configRepo)
+	setConfigUseCase := usecase.NewSetTenantConfigUseCase(configRepo)
+	bootstrapConfigUseCase := usecase.NewBootstrapTenantConfigUseCase(configRepo)
+
+	configController := controller.NewTenantConfigController(getConfigUseCase, setConfigUseCase, bootstrapConfigUseCase)
+	configController.RegisterReadRoute(apiGroup, audit.ConfigAccess(emitter, audit.OperationRead), gates.Read)
+	configController.RegisterSetRoute(apiGroup, gates.Set)
+	configController.RegisterBootstrapRoute(apiGroup, audit.ConfigAccess(emitter, audit.OperationBootstrap), gates.Bootstrap)
+	return configController
 }

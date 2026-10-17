@@ -1,7 +1,8 @@
-GET /api/v1/users
-GET /api/v1/users/:id
 GET /api/v1/tenants
 GET /api/v1/tenants/:id
+GET /api/v1/tenant/config/:key
+GET /api/v1/users
+GET /api/v1/users/:id
 GET /api/v1/plans
 GET /api/v1/plans/:id
 GET /api/v1/roles
@@ -14,6 +15,8 @@ POST /api/v1/auth/refresh
 POST /api/v1/auth/revoke-all
 POST /api/v1/tenants
 POST /api/v1/tenants/:id/plan
+POST /api/v1/tenant/config
+POST /api/v1/tenant/bootstrap
 POST /api/v1/users
 POST /api/v1/plans
 POST /api/v1/roles

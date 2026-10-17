@@ -8,6 +8,7 @@ import (
 )
 
 type CreateTenantRequest struct {
+	Namespace   string `json:"namespace,omitempty" binding:"omitempty,max=50"`
 	Name        string `json:"name" binding:"required,min=2,max=100"`
 	Slug        string `json:"slug" binding:"required,min=2,max=50,slug"`
 	Description string `json:"description" binding:"required,min=5,max=500"`

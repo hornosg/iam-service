@@ -9,6 +9,7 @@ import (
 )
 
 type TenantResponse struct {
+	Namespace    string                       `json:"namespace"`
 	ID           uuid.UUID                    `json:"id"`
 	Name         string                       `json:"name"`
 	Slug         string                       `json:"slug"`
@@ -42,12 +43,13 @@ type TenantListResponse struct {
 }
 
 type TenantSummaryResponse struct {
-	ID       uuid.UUID `json:"id"`
-	Name     string    `json:"name"`
-	Slug     string    `json:"slug"`
-	Status   string    `json:"status"`
-	Type     string    `json:"type"`
-	IsActive bool      `json:"is_active"`
+	Namespace string    `json:"namespace"`
+	ID        uuid.UUID `json:"id"`
+	Name      string    `json:"name"`
+	Slug      string    `json:"slug"`
+	Status    string    `json:"status"`
+	Type      string    `json:"type"`
+	IsActive  bool      `json:"is_active"`
 }
 
 func NewTenantResponse(tenant *entity.Tenant) *TenantResponse {
@@ -55,6 +57,7 @@ func NewTenantResponse(tenant *entity.Tenant) *TenantResponse {
 		ID:           tenant.ID,
 		Name:         tenant.Name,
 		Slug:         tenant.Slug,
+		Namespace:    tenant.Namespace,
 		Description:  tenant.Description,
 		Type:         tenant.Type.String(),
 		Status:       tenant.Status.String(),
@@ -80,12 +83,13 @@ func NewTenantResponse(tenant *entity.Tenant) *TenantResponse {
 
 func NewTenantSummaryResponse(tenant *entity.Tenant) *TenantSummaryResponse {
 	return &TenantSummaryResponse{
-		ID:       tenant.ID,
-		Name:     tenant.Name,
-		Slug:     tenant.Slug,
-		Status:   tenant.Status.String(),
-		Type:     tenant.Type.String(),
-		IsActive: tenant.IsActive(),
+		ID:        tenant.ID,
+		Name:      tenant.Name,
+		Slug:      tenant.Slug,
+		Namespace: tenant.Namespace,
+		Status:    tenant.Status.String(),
+		Type:      tenant.Type.String(),
+		IsActive:  tenant.IsActive(),
 	}
 }
 

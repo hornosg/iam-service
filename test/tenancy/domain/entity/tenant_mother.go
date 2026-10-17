@@ -21,6 +21,7 @@ func (TenantMother) WithDefaults() *entity.Tenant {
 		ID:           uuid.New(),
 		Name:         "Tenant de Prueba",
 		Slug:         "tenant-prueba",
+		Namespace:    value_object.DefaultProductNamespace,
 		Description:  "Descripción de prueba",
 		Type:         value_object.TenantTypePersonal,
 		Status:       value_object.TenantStatusActive,

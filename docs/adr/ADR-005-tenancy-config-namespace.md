@@ -1,7 +1,7 @@
 # ADR-005: Tenancy — contrato S2S del read de config, fuente única de stock policy y namespace de producto
 
-**Estado**: Propuesto (pendiente `@dev-security GO` + `Owner GO` — gate L4)
-**Fecha**: 2026-09-07 · **Enmendado 2026-09-15** (T1b: paso 0 de exclusión de middleware + corrección de rate-limiting)
+**Estado**: Aceptado para diseño (2026-10-15: revisión técnica y decisión de auditoría registradas; implementación pendiente)
+**Fecha**: 2026-09-07 · **Enmendado 2026-09-15** (T1b: paso 0 de exclusión de middleware + corrección de rate-limiting) · **Enmienda aceptada 2026-10-15** (T1: bootstrap insert-only y auditoría cross-tenant; ver resolución del gate)
 **Deciders**: @dev-architect, @dev-security (obligatorio — `ACC-E04` es L4), owner (sign-off, `D-12`)
 **Épica**: `ACC-E04` T1 — las tres decisiones DD-1/DD-2/DD-3 que el resto de la épica ejecuta.
 **Supera coordenadas de**: `ACC-E04-tenancy-absorber-tenant-config.md` §Decisiones de diseño (premisas re-verificadas hoy; dos estaban podridas — ver §Contexto, hallazgos H1 y H2).
@@ -270,7 +270,8 @@ decisión de autorización verificada (`Lookup` constant-time + scope). No hay e
 conocer el UUID del tenant no hay forma de pedir filas, y la policy `tenant_isolation` de `025`
 sigue comparando `tenant_id = app.tenant_id` fila a fila. El que la app pueda fijar el GUC a
 cualquier tenant tras el gate es la misma propiedad que `app.is_system_admin` tiene en `019` —
-deliberada, gated, auditada por request — con dos acotamientos extra que system_admin no tiene:
+deliberada, gated, con auditoría exigida por el contrato de T4 abajo (aún no implementada) —
+con dos acotamientos extra que system_admin no tiene:
 un solo tenant por transacción y una sola tabla (`tenant_config`) detrás del repo de config.
 
 **Camino de escritura** (T3 muda los commands `set`/`bootstrap` con sus tests; T4 los monta sólo si
@@ -284,11 +285,134 @@ este ADR los define — acá quedan definidos):
 - `POST /api/v1/tenant/bootstrap`: **S2S** con scope `tenant:provision` — el mismo que ya tiene
   `onboarding` en `ServicePolicy` (hecho 1): no requiere credencial nueva, y bootstrap es
   semánticamente provision (sembrar `DefaultConfigs` para un tenant recién creado). Gate idéntico
-  al del read: `X-Tenant-ID` se lee **sólo tras** el gate, y el idempotencia del bootstrap
-  (`ON CONFLICT` sobre `UNIQUE(tenant_id, config_key)`) se conserva tal cual muda de
-  `tenant-service`.
+  al del read: `X-Tenant-ID` se lee **sólo tras** el gate, se valida como UUID no nulo y se
+  propaga a la TX RLS. La semántica de bootstrap es **crear sólo ausentes, nunca sobrescribir**;
+  el mecanismo heredado `GetByKey` seguido de `Save`/upsert **no se conserva** (carrera descrita
+  en la escalación del 2026-10-15). Rige el contrato insert-only de T3 abajo.
 - **Nada a `iam_login` sobre `tenant_config`** (no hay config pre-auth; criterio (d) de T2, molde
   `019` §role-agnostic).
+
+### Bootstrap atómico (T3) — contrato normativo
+
+Excepción **acotada** a «cero lógica nueva» de la mudanza: corregir el check-then-upsert para
+preservar la semántica existente de no sobrescribir. No cambia `DefaultConfigs`, namespaces,
+scopes, datos expuestos ni el `Save` administrativo; no habilita un refactor general.
+
+El siguiente bloque es contrato documental ejecutable, no implementación SQL/Go:
+
+```json
+{
+  "operation": "bootstrap.insert_missing",
+  "primitive": "INSERT INTO tenant_config",
+  "conflict_clause": "ON CONFLICT (tenant_id, config_key) DO NOTHING",
+  "separate_from_admin_save": true,
+  "pre_read_required": false,
+  "transaction": "all defaults in one WithRLSInTransaction; SET LOCAL app.tenant_id; SQL through tx only",
+  "tenant_source": "validated non-nil UUID after tenant:provision gate",
+  "preserve_on_conflict": ["config_value", "id", "created_at", "updated_at"],
+  "created_count": "actual inserted rows after commit only; conflict=0; rollback=0 with error",
+  "repeat": "existing rows unchanged; created_count=0"
+}
+```
+
+T3 debe agregar una operación explícita insert-only de bootstrap, **separada** del `Save`/upsert
+administrativo. El índice único resuelve la carrera incluso cuando no existe fila para bloquear;
+no se sustituye por un pre-read ni se comparte la rama de actualización del admin. Los parámetros
+son bind variables, el tenant es el mismo en filas y GUC y todo el lote de defaults corre en
+**una TX** con el rol `account_app`, sin `r.db` dentro del closure. El contador suma sólo filas
+realmente insertadas (RowsAffected/RETURNING); se publica tras commit; cualquier fallo revierte
+el lote antes de commit y devuelve contador 0 + error. Si el error de commit deja resultado
+ambiguo (p. ej. pérdida de conexión), se devuelve 0 + error sin afirmar ausencia durable; repetir
+es seguro por idempotencia. En conflicto se preservan valor, ID y ambos timestamps
+del registro existente; una posterior escritura administrativa legítima conserva su semántica.
+
+**Aceptación T3 (DB real, pendiente):** dos conexiones independientes `account_app`, TX abiertas
+y barreras/canales con timeout (no sleeps como prueba de orden). Sobre la misma `(tenant_id,key)`:
+(A) admin inserta valor no default y retiene la TX; bootstrap intenta insertar; tras commit del
+admin, bootstrap termina sin cambios y cuenta 0. (B) bootstrap inserta default y retiene la TX;
+admin intenta su Save/upsert; tras commit de bootstrap, admin termina con su valor. Verificar
+valor final admin en ambos órdenes, ID/created_at existentes intactos y updated_at no tocado por
+bootstrap cuando pierde; en B el admin sí puede cambiar su updated_at. Repetir bootstrap → 0,
+sin cambio de ningún campo. Forzar rollback de bootstrap tras insertar y antes de commit → 0 +
+error y ninguna fila del lote persistida; liberar la TX y repetir → sólo inserciones reales.
+Probar además conflicto preexistente, lote mixto (cuenta sólo ausentes), dos bootstraps concurrentes
+(suma de contadores = filas nuevas), y RLS tenant A/B sin GUC residual tras commit/rollback.
+**Un checker textual o mock no prueba concurrencia PostgreSQL ni reemplaza estos tests.**
+
+### Auditoría cross-tenant (T4) — contrato normativo
+
+Destino existente (P-21, RULE-03/RULE-08): `github.com/hornosg/go-shared/infrastructure/logging`
+**v0.17.0**, `CanonicalLogger.Emit(level,event,fields)` → JSON/stdout → logs Docker con labels
+`logging=promtail`, `service_name=account-service` → `observability/promtail/promtail-config.yml`
+→ Loki (`http://lab-loki:3100/loki/api/v1/push`). Verificados archivos, no entrega remota.
+`src/router.go` ya usa `NewSecurityLogger("iam")`, pero su payload cerrado `SecurityEvent` no
+incluye `s2s_service`/outcome/correlación: no inventar campos en ese tipo ni otro logger/infra;
+reusar el primitivo `CanonicalLogger` del mismo módulo, con campos tipados/allowlist en adapter
+local de Infrastructure. No bajar Gin ni librerías de logging a Application/Domain.
+
+```json
+{
+  "event": "tenant.config_access",
+  "emitter": "tenancy Infrastructure route audit wrapper",
+  "wiring": "router composition -> required canonical adapter -> wrapper before RequireScope -> controller -> final emit after outcome",
+  "adapter": "go-shared v0.17.0 CanonicalLogger.Emit",
+  "sink": "JSON stdout -> Docker logs -> existing Promtail -> Loki",
+  "envelope": ["ts", "level", "service", "event"],
+  "fields": ["s2s_service", "tenant_id", "operation", "outcome", "correlation_id"],
+  "identity_source": "Authorize s2s_service context only; otherwise unattributed; never caller headers",
+  "tenant_source": "validated non-nil target UUID after gate; otherwise omitted",
+  "operation": ["config.read", "config.bootstrap"],
+  "outcome": ["success", "not_found", "denied", "invalid_request", "error"],
+  "correlation_source": "server-generated UUID; never raw caller header",
+  "forbidden": ["API key", "Authorization", "config value", "raw error", "raw headers", "PII"],
+  "emission": "one local attempt per completed in-process request, including gate denials and failures",
+  "sink_failure": "best-effort fail-open for audit only; never bypass authorization or RLS; no retry or rollback for logging",
+  "guarantee": "Emit returns void and ignores marshal/write errors; no persistence or remote delivery acknowledgement",
+  "limits": "stdout may block or lose events; no durable queue, remote durability, exactly-once, or Loki delivery proof"
+}
+```
+
+**Emisor/cableado exigidos, no existentes todavía:** la composición del router inyecta un adapter
+canónico no opcional en el wrapper de las dos rutas S2S (read y bootstrap), colocado **antes**
+de `RequireScope` para observar también `Abort`/401/403. El wrapper no autoriza ni hace otro
+lookup de keys: tras `c.Next()` recoge el resultado final y el `s2s_service` que **sólo** publica
+`Authorize` al pasar el gate. Un header `s2s_service`, `X-Service-Name` o equivalente no determina
+identidad. Si el gate no publica identidad (incluido el 403 por scope insuficiente del gate actual),
+se emite el literal `unattributed`, nunca se adivina el servicio; no se modifica auth para atribuirlo.
+Sin gate/UUID válido se omite `tenant_id`, sin copiar el header crudo. Tras validarlo se toma el
+mismo UUID del contexto que usa RLS: seleccionar tenant no prueba pertenencia del BFF a ese tenant.
+`operation` es constante de ruta; `outcome` es enum según 200/404/401-403/400/5xx, no texto de error;
+`correlation_id` es UUID generado localmente y propagado en la request. `ts` UTC y `service=iam`
+son del logger (nombre actual, sin adelantar rename). Sin config key ni URL/query cruda, cuerpo,
+API key, Authorization, valor de config o raw error. Éxitos `info`, denegaciones/invalid `warn`,
+fallos `error`. Un fallo de DB/commit nunca se registra como éxito de bootstrap.
+
+**Fallo del sink y límites:** `Emit` retorna void, descarta error de marshal y de `Writer.Write`;
+el adapter puede asegurar payload serializable, pero no detectar ni confirmar escritura fallida.
+Se intenta emitir localmente al terminar la request, sin reintentos/cola ni rollback de negocio;
+la pérdida de stdout o caída de Promtail/Loki **no cambia** la decisión de auth/RLS ni el resultado
+HTTP ya obtenido (fail-open sólo de auditoría). Un writer bloqueado puede bloquear la request:
+no se promete latencia acotada, durabilidad remota ni entrega exactly-once. Caída del proceso,
+fallo del writer o rechazo de Kong antes de entrar al wrapper pueden no dejar evento. También el gate de revocación de tokens (`token_revocation.go`), registrado sobre `apiV1` antes del wrapper, puede cortar con 401/500 sin evento (Bearer revocado, usuario inexistente o DB caída; revisión T4 2026-10-16). Guardar
+`s2s_service` en Gin no es emisión ni persistencia. **Riesgo residual aceptado por el owner**
+(2026-10-15, respuesta literal «usar los logs existentes» a la opción best-effort): puede haber
+acceso cross-tenant sin evidencia durable. Se acepta sólo el límite del logging, no bypass de
+auth/RLS. Ver `management/escalations/2026-10-15_ACC-E04-T1-decision-auditoria.md` para pregunta,
+procedencia y resolución de la condición del review. No agregar outbox, BD de auditoría ni
+infraestructura durable. Esta aceptación de diseño no acredita implementación ni entrega Loki.
+
+**Aceptación T4 (adapter real, pendiente):** capturar líneas JSON del adapter real con
+`NewCanonicalLoggerWithWriter("iam", writer)` y también comprobar que el composition root pasa
+el adapter no opcional al wrapper y que la construcción de producción usa
+`NewCanonicalLogger("iam")` (stdout, no `io.Discard`/nil). Probar 200, 404, 400, 401, 403 y fallo
+DB/commit 5xx con gate real; identidad del registry al autorizar y `unattributed` al denegar,
+headers de identidad falsificados sin efecto, tenant validado o ausente, operación/outcome y
+correlación válidos. Introducir secretos centinela en credenciales/body/headers/errores y verificar
+su ausencia en el JSON capturado. Con writer que devuelve error y writer que devuelve short-write,
+el resultado auth/RLS/HTTP no cambia; no afirmar que el adapter detecta esos errores. Revisar los
+labels Docker y destino configurado de Promtail. Esta captura demuestra **emisión local verificada**
+y cableado; **entrega Loki no probada** salvo evidencia runtime separada. Nada de esto se ejecuta
+con tests documentales de T1.
 
 ### Alternativas consideradas
 
@@ -377,6 +501,10 @@ alguien "unifique" los dos concepts por coincidencia de string. La normalizació
 
 ```sql
 -- 026_tenants_namespace_canonical.up.sql — normalización, NO creación:
+-- Escape local obligatorio (enmienda T8, revisión arquitectura 2026-10-16): account_migrator es owner
+-- NOBYPASSRLS y tenants tiene FORCE RLS; sin esto el UPDATE ve 0 filas y la migración estampa v26 sin
+-- normalizar. Convención para toda migración de datos sobre tablas con FORCE RLS:
+SELECT set_config('app.is_system_admin', 'true', true);   -- is_local=true: vive sólo en la TX del archivo
 -- (la columna, el índice y UNIQUE(namespace, slug) existen desde 010)
 UPDATE tenants SET namespace = 'mercado-cercano'
  WHERE namespace = 'mc';                          -- backfill del valor canónico
@@ -442,7 +570,9 @@ Con la elección de (i), 2 y 3 ya no comparten ni valor ni dueño.
 - ⚠️ El read S2S acepta el tenant que el llamador nombra (por UUID): un BFF comprometido con
   UUIDs ajenos puede leer config key a key. Aceptado: es la propiedad mínima del caso de uso
   (el BFF sirve a N tenants), igual que `system:admin` acepta cross-tenant; la mitigación es el
-  scope único, la una-tabla y la auditoría por `s2s_service`.
+  scope único, la una-tabla y la auditoría por `s2s_service` exigida en T4; su
+  carácter best-effort y la posible pérdida de evidencia fueron aceptados explícitamente por
+  el owner el 2026-10-15 («usar los logs existentes»), sin garantía de persistencia en Loki.
 - ⚠️ Dos superficies de config conviven hasta que MC migre su admin (el write humano queda en
   `tenant-service` vivo): los writes a la tabla vieja no se ven en `account-service`. Sin
   consumidor de write en el lab hoy (hecho 9), el riesgo es teórico; se cierra de verdad con la
@@ -476,8 +606,18 @@ Con la elección de (i), 2 y 3 ya no comparten ni valor ni dueño.
 > Sin ambos marcados, T1 NO está aprobada y T2/T8 (que dependen de ella) no se ejecutan
 > (`[~]` = hecho, esperando firma).
 
-- [ ] **@dev-security GO** — gate S2S de DD-1 (scope `config:read`, `app.tenant_id` fijado sólo
+- [x] **@dev-security GO** — gate S2S de DD-1 (scope `config:read`, `app.tenant_id` fijado sólo
   tras el gate y dentro de la TX, acotamiento a una tabla, camino de escritura), DD-2 (fuente
   única) y DD-3 (valor canónico, RLS intacta, separación de namespaces).
-- [ ] **Owner GO** — contrato de superficie S2S nueva sobre la raíz de confianza + valor canónico
+- [x] **Owner GO** — contrato de superficie S2S nueva sobre la raíz de confianza + valor canónico
   de namespace para lo existente (`D-12`).
+
+### Resolución documentada de la condición (2026-10-15)
+
+El orquestador verifica satisfecha la única condición del último dictamen: aceptación expresa
+de posible pérdida de auditoría. Review previo: bootstrap corregido en diseño y contrato técnico
+audit favorable; su `SECURITY-REVIEW: bloqueante` histórico no se reescribe ni se inventa otro.
+Registro: `management/escalations/2026-10-15_ACC-E04-T1-decision-auditoria.md`; cierre del gate
+en `management/escalations/2026-10-15_ACC-E04-T1-signoff.md`. JSON normativo sin cambios.
+Los GO son del diseño condicionado y su decisión registrada, no firma del owner sobre pruebas
+ni autorización de publicación. Concurrencia DB y eventos del adapter real se verifican en T3/T4.

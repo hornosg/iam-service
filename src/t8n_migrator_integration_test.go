@@ -16,7 +16,7 @@
 //
 // Se testea contra las funciones REALES de main() (setupMigratorDatabase,
 // assertNoRLSBypass) y RunMigrations de go-shared, sobre un Postgres efímero
-// con las migraciones reales 001→024. La parte "docker compose up -d deja el
+// con las migraciones reales 001→026. La parte "docker compose up -d deja el
 // servicio sirviendo" es verificación en vivo del EXEC; acá se cubre su núcleo
 // de DB: la secuencia de arranque migra, estampa y cierra sin tocar
 // ALLOW_SUPERUSER_DB.
@@ -43,6 +43,7 @@ import (
 	sharedmigrate "github.com/hornosg/go-shared/migrate"
 
 	iamroot "github.com/hornosg/iam-service"
+	sharedpostgres "github.com/hornosg/iam-service/src/shared/postgres"
 )
 
 const (
@@ -160,7 +161,7 @@ func (l *t8nLab) assertStampedVersion(t *testing.T, expected int) {
 // con TODA la migración pendiente (base limpia) y SIN tocar
 // ALLOW_SUPERUSER_DB, la secuencia de arranque de main() aplicada con el rol
 // dedicado — setupMigratorDatabase → guard de T6 → RunMigrations → Close —
-// migra 001→024, estampa v24 y no deja conexiones de migrator abiertas.
+// migra 001→026, estampa v26 y no deja conexiones de migrator abiertas.
 // Es el Flow B de la épica: base limpia migrada POR account_migrator.
 func TestT8n_ArranqueUnicoConMigracionPendiente(t *testing.T) {
 	l := startT8nLab(t)
@@ -176,13 +177,13 @@ func TestT8n_ArranqueUnicoConMigracionPendiente(t *testing.T) {
 
 	// Guard de T6 sobre la conexión de migraciones: tercera conexión abierta
 	// → tercer guard. account_migrator es NOBYPASSRLS → pasa.
-	require.NoError(t, assertNoRLSBypass(migrateDB))
+	require.NoError(t, sharedpostgres.AssertNoRLSBypass(migrateDB))
 
 	// Flow B: migrar la base limpia completa como account_migrator. Requiere
 	// CREATEROLE (017/018 crean iam_login/account_app) y ownership de la base.
 	require.NoError(t, sharedmigrate.RunMigrations(migrateDB, iamroot.MigrationsFS, "iam_db"))
 
-	l.assertStampedVersion(t, 24)
+	l.assertStampedVersion(t, 26)
 
 	// FORCE RLS ata al owner: account_migrator puede reescribir el esquema
 	// (es su trabajo) pero sin el GUC app.tenant_id ve 0 filas de tenant.
@@ -210,9 +211,9 @@ func TestT8n_ArranqueUnicoConMigracionPendiente(t *testing.T) {
 	// sello, UNA fila.
 	secondBoot := l.openMigratorDB(t)
 	defer secondBoot.Close()
-	require.NoError(t, assertNoRLSBypass(secondBoot))
+	require.NoError(t, sharedpostgres.AssertNoRLSBypass(secondBoot))
 	require.NoError(t, sharedmigrate.RunMigrations(secondBoot, iamroot.MigrationsFS, "iam_db"))
-	l.assertStampedVersion(t, 24)
+	l.assertStampedVersion(t, 26)
 }
 
 // TestT8n_Negativas cubre las negativas del contrato:
@@ -246,7 +247,7 @@ func TestT8n_Negativas(t *testing.T) {
 	// Sanity del grant correcto: account_app puede LEER la versión.
 	var version int
 	require.NoError(t, appDB.QueryRow(`SELECT max(version) FROM schema_migrations`).Scan(&version))
-	assert.Equal(t, 24, version)
+	assert.Equal(t, 26, version)
 
 	// NEGATIVA del contrato: TRUNCATE → permission denied.
 	_, err = appDB.Exec(`TRUNCATE schema_migrations`)
@@ -264,7 +265,7 @@ func TestT8n_Negativas(t *testing.T) {
 	assert.Contains(t, strings.ToLower(err.Error()), "permission denied")
 
 	// La historia quedó intacta tras los intentos.
-	l.assertStampedVersion(t, 24)
+	l.assertStampedVersion(t, 26)
 
 	// Guard de T6 sobre la credencial de migraciones — caso sutil: rol
 	// NOSUPERUSER pero BYPASSRLS. rolsuper=false solo engañaría a un chequeo
@@ -276,12 +277,12 @@ func TestT8n_Negativas(t *testing.T) {
 	probeDB := l.connectAs(t, "t8n_bypass_probe", t8nProbePassword)
 	defer probeDB.Close()
 
-	err = assertNoRLSBypass(probeDB)
+	err = sharedpostgres.AssertNoRLSBypass(probeDB)
 	require.Error(t, err, "el guard debe rechazar un DB_MIGRATE_USER con BYPASSRLS aunque no sea superuser")
 	assert.Contains(t, err.Error(), "SUPERUSER o BYPASSRLS")
 
 	// Y el superuser del lab tampoco pasaría el guard como migrator.
-	err = assertNoRLSBypass(l.superDB)
+	err = sharedpostgres.AssertNoRLSBypass(l.superDB)
 	require.Error(t, err, "el guard debe rechazar un DB_MIGRATE_USER superuser")
 	assert.Contains(t, err.Error(), "SUPERUSER o BYPASSRLS")
 }

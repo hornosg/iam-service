@@ -56,3 +56,14 @@ TO account_app;
 
 -- RunMigrations (go-shared/migrate) consulta schema_migrations al arrancar.
 GRANT SELECT ON schema_migrations TO account_app;
+
+-- ACC-E04.T2: grant de config en el DDL del rol. En bootstrap limpio la tabla
+-- todavía no existe (la crea 025); el grant forward de 025 completa ese camino.
+-- Al re-aplicar 018 sobre una base ya migrada, restaura también este grant.
+DO $$
+BEGIN
+  IF to_regclass('public.tenant_config') IS NOT NULL THEN
+    GRANT SELECT, INSERT, UPDATE, DELETE ON public.tenant_config TO account_app;
+  END IF;
+END
+$$;

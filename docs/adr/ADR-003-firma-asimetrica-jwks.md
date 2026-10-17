@@ -426,6 +426,23 @@ evidencia para los otros dos. Evidencia de esta rev.: ni `marketplace-service` n
 verificado 2026-09-15) — para ellos el flip de Kong sí es transparente. La lista de los 14 bloques
 `anonymous` no cambia.
 
+#### B.3 Delta de T5b (2026-10-16) — reclasificación tras la implementación dual
+
+Tras `ACC-E03` T5b (go-shared v0.18.0) el grep canónico devuelve 24 líneas. La tabla firmada de §B
+no se edita; este delta clasifica lo que cambió de lugar o de naturaleza:
+
+| Servicio | `archivo:línea` | Clasificación |
+|---|---|---|
+| go-shared | `infrastructure/jwtkeyring/jwtkeyring.go:40` | definición de `AcceptedMethods` (HS256 fijado + RS256) del keyFunc dual — no es un call site de verificación |
+| go-shared | `infrastructure/jwtkeyring/jwtkeyring.go:204` | definición del keyFunc dual: rama HS256 (sólo el secreto legacy; T6 la retira) |
+| go-shared | `infrastructure/jwtkeyring/jwtkeyring.go:205` | definición del keyFunc dual: guard del método HMAC y del secreto vacío (T6 lo retira con la rama) |
+| sales-service | `main.go:78` | verificador de flota #3 (`TenantValidation`), antes `main.go:82`: coordenada corrida por la extracción de la config a `tenantValidationConfig()`; sigue dual vía go-shared v0.18.0 |
+| catalog-service | `cmd/api/main.go:322` | verificador de flota #18 (`VerifyTenantCommandJWT`), antes `main.go:325`: coordenada corrida; usa `jwtkeyring` de go-shared v0.18.0 (ya no hay copia local) |
+
+Las filas de §B que apuntaban a las definiciones de `TenantValidation`/`VerifyPlatformJWT` en go-shared
+y a los keyFuncs propios de webdata (#15) y catalog (#18) ya no devuelven línea: el selector criptográfico
+vive en un único origen, `go-shared/infrastructure/jwtkeyring`, que T6 edita en un solo lugar.
+
 ### C. Opciones y decisión
 
 **Opción 1 — Aceptación dual en los verificadores de flota (release de go-shared + bump + wiring propio). ELEGIDA, pendiente de firma.**

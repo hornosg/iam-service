@@ -65,11 +65,17 @@ services:
       # Secreto S2S compartido: el gate Authorize lo valida para autorizar llamadas de servicios
       # internos (onboarding/sales/pim) a /tenants, /users, /roles, /plans.
       S2S_API_KEY: ${S2S_API_KEY:-s2s-internal}
+      # ACC-E04 T5: credencial propia de catalog-bff (scope config:read, ADR-005 DD-1 b). Vacía →
+      # catalog-bff no se registra en el registry y su read de config da 401 (fail-closed).
+      S2S_KEY_CATALOG_BFF: ${S2S_KEY_CATALOG_BFF:-}
       PORT: 8080
+      # ACC-E03 T5b: keyring de públicas RS256 (go-shared v0.18.0; en release es obligatorio).
+      JWT_PUBLIC_KEY_DIR: /etc/jwt-keyring
     ports:
       - "8080:8080"
     volumes:
       - .:/app
+      - ${JWT_KEYRING_DIR:-../../infra/jwt-keyring}:/etc/jwt-keyring:ro
       - account_go_mod_cache:/go/pkg/mod
     # El bind mount de arriba trae el ownership del host (uid 1000), no el de `appuser` fijado en
     # build-time por el Dockerfile — sin esto, air no puede ni crear /app/tmp.

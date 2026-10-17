@@ -5,6 +5,7 @@ import (
 
 	"github.com/hornosg/iam-service/src/tenancy/application/response"
 	"github.com/hornosg/iam-service/src/tenancy/domain/port"
+	"github.com/hornosg/iam-service/src/tenancy/domain/value_object"
 )
 
 type GetTenantBySlugUseCase struct {
@@ -17,8 +18,12 @@ func NewGetTenantBySlugUseCase(tenantRepo port.TenantRepository) *GetTenantBySlu
 	}
 }
 
-func (uc *GetTenantBySlugUseCase) Execute(ctx context.Context, slug string) (*response.TenantResponse, error) {
-	tenant, err := uc.tenantRepo.GetBySlug(ctx, slug)
+func (uc *GetTenantBySlugUseCase) Execute(ctx context.Context, namespace, slug string) (*response.TenantResponse, error) {
+	namespace, err := value_object.ResolveProductNamespace(namespace)
+	if err != nil {
+		return nil, err
+	}
+	tenant, err := uc.tenantRepo.GetBySlug(ctx, namespace, slug)
 	if err != nil {
 		return nil, err
 	}

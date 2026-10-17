@@ -88,6 +88,8 @@ func (h *TenantHandler) CreateTenant(c *gin.Context) {
 			httpresp.JSON(c, http.StatusConflict, "Domain already exists")
 		case exception.ErrInvalidTenantType:
 			httpresp.JSON(c, http.StatusBadRequest, "Invalid tenant type")
+		case exception.ErrInvalidNamespace:
+			httpresp.JSON(c, http.StatusBadRequest, "Invalid product namespace")
 		case exception.ErrInvalidOwner:
 			httpresp.JSON(c, http.StatusBadRequest, "Invalid owner")
 		default:
@@ -129,8 +131,12 @@ func (h *TenantHandler) GetTenantBySlug(c *gin.Context) {
 		return
 	}
 
-	response, err := h.getTenantBySlugUseCase.Execute(c.Request.Context(), slug)
+	response, err := h.getTenantBySlugUseCase.Execute(c.Request.Context(), c.Query("namespace"), slug)
 	if err != nil {
+		if err == exception.ErrInvalidNamespace {
+			httpresp.JSON(c, http.StatusBadRequest, "Invalid product namespace")
+			return
+		}
 		if err == exception.ErrTenantNotFound {
 			httpresp.JSON(c, http.StatusNotFound, "Tenant not found")
 			return
@@ -348,4 +354,3 @@ func (h *TenantHandler) RegisterRoutes(router *gin.RouterGroup) {
 		tenantGroup.PATCH("/:id/features", h.UpdateTenantFeatures)
 	}
 }
-

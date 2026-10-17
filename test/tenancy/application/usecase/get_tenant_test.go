@@ -61,7 +61,7 @@ func TestGetTenantBySlugUseCase_Execute_Found_ReturnsResponse(t *testing.T) {
 	mockRepo.SetupTenants([]*entity.Tenant{tenant})
 
 	// Act
-	resp, err := getBySlugUseCase.Execute(ctx, "mi-tienda")
+	resp, err := getBySlugUseCase.Execute(ctx, "", "mi-tienda")
 
 	// Assert
 	require.NoError(t, err)
@@ -77,7 +77,7 @@ func TestGetTenantBySlugUseCase_Execute_NotFound_ReturnsError(t *testing.T) {
 	ctx := context.Background()
 
 	// Act
-	resp, err := getBySlugUseCase.Execute(ctx, "nonexistent-slug")
+	resp, err := getBySlugUseCase.Execute(ctx, "", "nonexistent-slug")
 
 	// Assert
 	assert.Error(t, err)
@@ -93,7 +93,7 @@ func TestGetTenantBySlugUseCase_Execute_RepoFails_ReturnsError(t *testing.T) {
 	mockRepo.ShouldFailOn("GetBySlug")
 
 	// Act
-	resp, err := getBySlugUseCase.Execute(ctx, "any-slug")
+	resp, err := getBySlugUseCase.Execute(ctx, "", "any-slug")
 
 	// Assert
 	assert.Error(t, err)

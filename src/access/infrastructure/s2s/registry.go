@@ -22,6 +22,10 @@ const (
 	// ScopeSystemAdmin da acceso equivalente a system_admin sobre los endpoints
 	// de gestión del IAM. Es el scope más amplio; solo onboarding/sales/pim legacy.
 	ScopeSystemAdmin Scope = "system:admin"
+	// ScopeConfigRead permite leer tenant_config por key para UN tenant por
+	// request (ACC-E04 T4, ADR-005 DD-1). No da acceso a ninguna otra tabla: la
+	// ruta sólo monta el query de config y el tenant se fija tras el gate.
+	ScopeConfigRead Scope = "config:read"
 )
 
 // Credential vincula una API key (secreta, vive en env) con un servicio y sus scopes.
@@ -54,6 +58,10 @@ var ServicePolicy = map[string][]Scope{
 	// como legacy y debe revisarse en una épica de hardening.
 	"sales": {ScopeSystemAdmin},
 	"pim":   {ScopeSystemAdmin},
+	// catalog-bff-service: resuelve catalog.stock_policy por tenant para el
+	// browse anónimo del storefront (ADR-005 DD-1 opción b). Sólo lectura de
+	// config; secreto en S2S_KEY_CATALOG_BFF.
+	"catalog-bff": {ScopeConfigRead},
 }
 
 // minS2SKeyBytes es la longitud mínima aceptable para una S2S key. 32 bytes
