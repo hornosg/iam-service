@@ -47,7 +47,7 @@ func TestAuthorize_T4b_VerifierNilConTipoRS256ConKidDa401SinPanic(t *testing.T) 
 	// Pasar un `nil` sin tipo acá NO reproduciría el defecto y el criterio de
 	// la tarea lo declara falla.
 	var verifier *adapter.JWTServiceAdapter
-	factory := authmw.NewScopeMiddlewareFactory(testJWTSecret, testNamespace, registry, verifier)
+	factory := authmw.NewScopeMiddlewareFactory(testNamespace, registry, verifier)
 
 	router.GET("/tenant-scoped", factory.RequireScope(s2s.ScopeTenantAdmin, "tenant_admin"))
 

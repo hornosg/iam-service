@@ -112,7 +112,7 @@ func newTestS2SServer(t *testing.T) *testS2SServer {
 		"system-admin-svc": keySystemAdminSvc,
 	})
 
-	authFactory := authmw.NewScopeMiddlewareFactory("jwt-secret-for-tests-only", testNamespace, registry)
+	authFactory := authmw.NewScopeMiddlewareFactory(testNamespace, registry)
 
 	apiV1 := router.Group("/api/v1")
 	adminGroup := apiV1.Group("", authFactory.RequireScope(s2s.ScopeSystemAdmin, "system_admin"))

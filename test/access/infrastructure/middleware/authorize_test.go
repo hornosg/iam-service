@@ -23,6 +23,7 @@ import (
 
 	authmw "github.com/hornosg/iam-service/src/access/infrastructure/middleware"
 	"github.com/hornosg/iam-service/src/access/infrastructure/s2s"
+	"github.com/hornosg/iam-service/src/identity/infrastructure/adapter"
 	sharedctx "github.com/hornosg/iam-service/src/shared/context"
 )
 
@@ -52,7 +53,11 @@ func newRouter(t *testing.T) (*gin.Engine, *map[string]bool) {
 		"sales":          salesKey,
 		"whatsapp-agent": whatsappKey,
 	})
-	factory := authmw.NewScopeMiddlewareFactory(testJWTSecret, testNamespace, registry, nil)
+	verifier := adapter.NewJWTServiceAdapter(&adapter.SigningKey{
+		PrivateKey: authorizeT4Key,
+		KID:        t4KID(t, authorizeT4Key),
+	})
+	factory := authmw.NewScopeMiddlewareFactory(testNamespace, registry, verifier)
 
 	report := map[string]bool{}
 	reportFlag := func(c *gin.Context) {
@@ -83,8 +88,10 @@ func makeToken(t *testing.T, roles []string, extraClaims map[string]interface{})
 	for k, v := range extraClaims {
 		claims[k] = v
 	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	str, err := token.SignedString([]byte(testJWTSecret))
+	// ACC-E03 T6: el gate sólo verifica RS256 por kid.
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	token.Header["kid"] = t4KID(t, authorizeT4Key)
+	str, err := token.SignedString(authorizeT4Key)
 	require.NoError(t, err)
 	return str
 }

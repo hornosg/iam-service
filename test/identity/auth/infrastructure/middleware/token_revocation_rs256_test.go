@@ -81,7 +81,7 @@ func t4NoneToken(t *testing.T, claims value_object.TokenClaims) string {
 // t4Verifier arma el verificador dual (T3/T4) con el par RSA del fixture y el
 // secreto legacy del archivo base.
 func t4Verifier(t *testing.T) *adapter.JWTServiceAdapter {
-	return adapter.NewJWTServiceAdapter(signingKey, &adapter.SigningKey{
+	return adapter.NewJWTServiceAdapter(&adapter.SigningKey{
 		PrivateKey: t4Key,
 		KID:        t4KID(t, t4Key),
 	})
@@ -177,17 +177,19 @@ func TestTokenRevocation_T4_ConfusionRSHSNoPueblaTokenClaims(t *testing.T) {
 	assert.Empty(t, w.Header().Get("X-User-Id"), "el request no queda autenticado")
 }
 
-// VENTANA DUAL — el token HS256 del secreto viejo sigue poblado hasta T6
-// (paridad con el harness base, que ya lo cubre; acá queda pinneado junto a
-// los RS256 para que el archivo cuente la historia completa del gate dual).
-func TestTokenRevocation_T4_HS256LegacySiguePoblando(t *testing.T) {
+// ACC-E03 T6 criterio (c): tras el cutover, un HS256 firmado con el secreto
+// compartido viejo NO puebla token_claims ni user_id — el request no queda
+// autenticado. Reemplaza al test T4 que lo poblaba durante la ventana dual.
+func TestTokenRevocation_T6_HS256NoPuebla(t *testing.T) {
 	r := t4Engine(t, t4Verifier(t))
 
-	claims := baseClaims(uuid.New())
-	w := doRequest(t, r, "/api/v1/anything", "Bearer "+signToken(t, claims))
-	require.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, claims.UserID.String(), w.Header().Get("X-User-Id"),
-		"durante la ventana de cutover el HS256 legacy sigue verificado (ADR-003 §f)")
+	c := &adapter.JWTClaims{TokenClaims: baseClaims(uuid.New())}
+	str, err := jwt.NewWithClaims(jwt.SigningMethodHS256, c).SignedString([]byte("legacy-shared-secret-0123456789-abcdef"))
+	require.NoError(t, err)
+
+	w := doRequest(t, r, "/api/v1/anything", "Bearer "+str)
+	assert.Empty(t, w.Header().Get("X-Token-Claims"), "HS256 NO debe poblar token_claims tras T6")
+	assert.Empty(t, w.Header().Get("X-User-Id"), "HS256 NO debe autenticar el request tras T6")
 }
 
 // interface-check: la superficie del gate sigue siendo port.JWTService.

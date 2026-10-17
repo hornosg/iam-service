@@ -51,7 +51,6 @@ func buildRouter(appDB *sql.DB, loginDB *sql.DB) *gin.Engine {
 	securityLogger := sharedlog.NewSecurityLogger("iam")
 	serviceNamespace := env.Get("SERVICE_NAMESPACE", "mc")
 	router.Use(tenantmw.TenantValidation(tenantmw.TenantValidationConfig{
-		JWTSecret: os.Getenv("JWT_SECRET"),
 		Namespace: serviceNamespace,
 		ExcludedRoutes: []string{
 			"/health",
@@ -145,7 +144,6 @@ func buildRouter(appDB *sql.DB, loginDB *sql.DB) *gin.Engine {
 	if err != nil {
 		log.Fatalf("Error loading S2S registry: %v", err)
 	}
-	jwtSecret := os.Getenv("JWT_SECRET")
 
 	// Switch de módulos — ACC-E01 T7: MODULES_DISABLED (lista separada por
 	// comas) decide qué módulos NO se montan: su Setup*Module no corre y sus
@@ -185,11 +183,11 @@ func buildRouter(appDB *sql.DB, loginDB *sql.DB) *gin.Engine {
 	var signingVerifier *adapter.JWTServiceAdapter
 	if !disabled["identity"] {
 		authConfig = config.NewAuthModuleConfigFromEnv()
-		signingVerifier = adapter.NewJWTServiceAdapter(authConfig.JWTSecret, authConfig.SigningKey)
+		signingVerifier = adapter.NewJWTServiceAdapter(authConfig.SigningKey)
 		authRepoApp = config.SetupTokenRevocationGate(apiV1, appDB, loginDB, signingVerifier)
 	}
 
-	authFactory := authmw.NewScopeMiddlewareFactory(jwtSecret, serviceNamespace, s2sRegistry, signingVerifier)
+	authFactory := authmw.NewScopeMiddlewareFactory(serviceNamespace, s2sRegistry, signingVerifier)
 	adminGroup := apiV1.Group("", authFactory.RequireScope(s2s.ScopeSystemAdmin, "system_admin"))
 	tenantScopedGroup := apiV1.Group("", authFactory.RequireScopes([]s2s.Scope{s2s.ScopeSystemAdmin, s2s.ScopeTenantAdmin}, "tenant_admin", "system_admin"))
 

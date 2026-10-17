@@ -2,7 +2,11 @@ package controller_test
 
 import (
 	"bytes"
+	"crypto/rand"
+	"crypto/rsa"
 	"encoding/json"
+	"github.com/hornosg/iam-service/src/identity/infrastructure/adapter"
+	"github.com/hornosg/iam-service/src/identity/infrastructure/config"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -13,20 +17,33 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 
-	authmw "github.com/hornosg/iam-service/src/access/infrastructure/middleware"
-	"github.com/hornosg/iam-service/src/access/infrastructure/s2s"
 	"github.com/hornosg/iam-service/src/access/application/usecase"
 	"github.com/hornosg/iam-service/src/access/domain/entity"
 	"github.com/hornosg/iam-service/src/access/infrastructure/controller"
 	rolecriteria "github.com/hornosg/iam-service/src/access/infrastructure/criteria"
+	authmw "github.com/hornosg/iam-service/src/access/infrastructure/middleware"
+	"github.com/hornosg/iam-service/src/access/infrastructure/s2s"
 	roleMother "github.com/hornosg/iam-service/test/access/domain/entity"
 	rolerepo "github.com/hornosg/iam-service/test/access/infrastructure/persistence/repository"
 )
 
 const (
-	routesTestSecret = "test-secret-key-at-least-32-chars-long!!"
-	routesTestNS     = "mc"
+	routesTestNS = "mc"
 )
+
+// routesTestKey firma los tokens humanos del test (ACC-E03 T6: el gate sólo
+// verifica RS256 por kid) y su pública alimenta la keyring del gate.
+var routesTestKey = func() *rsa.PrivateKey {
+	k, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		panic(err)
+	}
+	return k
+}()
+
+func routesVerifier() *adapter.JWTServiceAdapter {
+	return adapter.NewJWTServiceAdapter(&adapter.SigningKey{PrivateKey: routesTestKey, KID: config.SigningKeyKID(&routesTestKey.PublicKey)})
+}
 
 // signRoleToken firma un JWT HS256 con namespace y roles dados.
 func signRoleToken(t *testing.T, roles []string) string {
@@ -38,7 +55,9 @@ func signRoleToken(t *testing.T, roles []string) string {
 		"roles":     roles,
 		"exp":       time.Now().Add(time.Hour).Unix(),
 	}
-	tok, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(routesTestSecret))
+	jt := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	jt.Header["kid"] = config.SigningKeyKID(&routesTestKey.PublicKey)
+	tok, err := jt.SignedString(routesTestKey)
 	if err != nil {
 		t.Fatalf("sign: %v", err)
 	}
@@ -56,7 +75,7 @@ func newRolesRouter(t *testing.T) (*gin.Engine, *rolerepo.MockRoleRepository) {
 
 	// Registry S2S vacío: en estos tests autorizamos sólo por JWT.
 	registry := s2s.LoadFromEnvForTests(map[string]string{})
-	authFactory := authmw.NewScopeMiddlewareFactory(routesTestSecret, routesTestNS, registry, nil)
+	authFactory := authmw.NewScopeMiddlewareFactory(routesTestNS, registry, routesVerifier())
 
 	apiV1 := router.Group("/api/v1")
 	adminGroup := apiV1.Group("", authFactory.RequireScope(s2s.ScopeSystemAdmin, "system_admin"))

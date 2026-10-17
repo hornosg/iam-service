@@ -67,11 +67,11 @@ func t4Router(t *testing.T, key *rsa.PrivateKey) (*gin.Engine, *map[string]bool)
 	registry := s2s.LoadFromEnvForTests(map[string]string{
 		"sales": salesKey,
 	})
-	verifier := adapter.NewJWTServiceAdapter(testJWTSecret, &adapter.SigningKey{
+	verifier := adapter.NewJWTServiceAdapter(&adapter.SigningKey{
 		PrivateKey: key,
 		KID:        t4KID(t, key),
 	})
-	factory := authmw.NewScopeMiddlewareFactory(testJWTSecret, testNamespace, registry, verifier)
+	factory := authmw.NewScopeMiddlewareFactory(testNamespace, registry, verifier)
 
 	report := map[string]bool{}
 	reportFlag := func(c *gin.Context) {
@@ -219,13 +219,21 @@ func TestAuthorize_T4_ConfusionRSHSRechazada401(t *testing.T) {
 		"HS256 firmado con la pública como secreto debe ser 401 (confusión RS/HS cerrada a nivel gate)")
 }
 
-// VENTANA DUAL — el HS256 del secreto viejo sigue autorizando hasta T6
-// (ADR-003 §f): la paridad con el harness base queda pinneada junto a los
-// RS256 para que el archivo cuente la historia completa del gate dual.
-func TestAuthorize_T4_HS256LegacySiguePasando(t *testing.T) {
-	router, report := t4Router(t, authorizeT4Key)
-	token := makeToken(t, []string{"tenant_admin"}, nil)
+// ACC-E03 T6 criterio (c): tras el cutover, un HS256 firmado con el secreto
+// compartido viejo es rechazado por el gate (401) — si pasara, la raíz de
+// confianza seguiría compartida. Reemplaza al test T4 que lo dejaba pasar
+// durante la ventana dual.
+func TestAuthorize_T6_HS256Rechazado(t *testing.T) {
+	router, _ := t4Router(t, authorizeT4Key)
+	claims := jwt.MapClaims{
+		"user_id":   uuid.New().String(),
+		"tenant_id": uuid.New().String(),
+		"roles":     []string{"system_admin"},
+		"namespace": testNamespace,
+		"exp":       time.Now().Add(15 * time.Minute).Unix(),
+	}
+	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(testJWTSecret))
+	require.NoError(t, err)
 	w := do(t, router, http.MethodGet, "/tenant-scoped", token, "")
-	assertAuthorized(t, w, "durante la ventana de cutover el HS256 legacy sigue autorizado")
-	assert.False(t, (*report)["is_system_admin"])
+	assert.Equal(t, http.StatusUnauthorized, w.Code, "HS256 con el secreto viejo debe dar 401 tras T6")
 }

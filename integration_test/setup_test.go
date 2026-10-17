@@ -112,7 +112,7 @@ func newTestServer(t *testing.T) *testServer {
 		"tenant-admin-svc": keyTenantAdminSvc,
 		"system-admin-svc": keySystemAdminSvc,
 	})
-	authFactory := authmw.NewScopeMiddlewareFactory("jwt-secret-for-tests-only", testNamespace, registry)
+	authFactory := authmw.NewScopeMiddlewareFactory(testNamespace, registry)
 
 	apiV1 := router.Group("/api/v1")
 	adminGroup := apiV1.Group("", authFactory.RequireScope(s2s.ScopeSystemAdmin, "system_admin"))

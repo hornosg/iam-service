@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -13,7 +15,7 @@ import (
 )
 
 const (
-	testKey   = "test-secret-key-at-least-32-chars-long!!"
+	testKID   = "acc-test-authorize"
 	testNS    = "mc"
 	testKeyWA = "s2s-whatsapp-agent-key"
 	testKeyOn = "s2s-onboarding-key"
@@ -27,7 +29,27 @@ func testRegistry(t *testing.T) *s2s.Registry {
 	})
 }
 
-// signToken firma un JWT HS256 con los claims dados (namespace + roles).
+// testRSAKey es la clave de firma de los tests del paquete (ACC-E03 T6: el
+// gate sólo verifica RS256 por kid; HS256 ya no tiene rama de verificación).
+var testRSAKey = func() *rsa.PrivateKey {
+	k, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		panic(err)
+	}
+	return k
+}()
+
+// testResolver resuelve testKID → pública de testRSAKey.
+type testResolver struct{}
+
+func (testResolver) PublicKeyFor(kid string) (*rsa.PublicKey, bool) {
+	if kid != testKID {
+		return nil, false
+	}
+	return &testRSAKey.PublicKey, true
+}
+
+// signToken firma un JWT RS256 (kid testKID) con los claims dados (namespace + roles).
 func signToken(t *testing.T, namespace string, roles []string) string {
 	t.Helper()
 	claims := jwt.MapClaims{
@@ -39,7 +61,9 @@ func signToken(t *testing.T, namespace string, roles []string) string {
 	if roles != nil {
 		claims["roles"] = roles
 	}
-	tok, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(testKey))
+	jt := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	jt.Header["kid"] = testKID
+	tok, err := jt.SignedString(testRSAKey)
 	if err != nil {
 		t.Fatalf("sign: %v", err)
 	}
@@ -158,7 +182,7 @@ func TestAuthorize(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
 			c, engine := gin.CreateTestContext(w)
-			engine.Use(Authorize(testKey, testNS, testRegistry(t), nil, []s2s.Scope{tc.scope}, tc.allowed...))
+			engine.Use(Authorize(testNS, testRegistry(t), testResolver{}, []s2s.Scope{tc.scope}, tc.allowed...))
 			engine.GET("/x", func(c *gin.Context) {
 				if tc.wantS2S {
 					if s, _ := c.Get("s2s"); s != true {
@@ -186,7 +210,7 @@ func TestAuthorize(t *testing.T) {
 // TestRequireScopeFactory verifica el helper factory para no repetir argumentos.
 func TestRequireScopeFactory(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	f := NewScopeMiddlewareFactory(testKey, testNS, testRegistry(t), nil)
+	f := NewScopeMiddlewareFactory(testNS, testRegistry(t), nil)
 
 	w := httptest.NewRecorder()
 	c, engine := gin.CreateTestContext(w)

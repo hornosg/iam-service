@@ -60,7 +60,6 @@ services:
       DB_SSLMODE: disable
       GIN_MODE: debug
       LOG_LEVEL: debug
-      JWT_SECRET: ${JWT_SECRET:-dev-secret-key-change-me-in-production-min-32-chars}
       SERVICE_NAMESPACE: ${SERVICE_NAMESPACE:-mc}
       # Secreto S2S compartido: el gate Authorize lo valida para autorizar llamadas de servicios
       # internos (onboarding/sales/pim) a /tenants, /users, /roles, /plans.
@@ -71,11 +70,16 @@ services:
       PORT: 8080
       # ACC-E03 T5b: keyring de públicas RS256 (go-shared v0.18.0; en release es obligatorio).
       JWT_PUBLIC_KEY_DIR: /etc/jwt-keyring
+      # ACC-E03 T5: el firmador RS256 (ADR-003 §b) lee la privada de un archivo montado; el flip
+      # es atómico con la credencial de Kong. keys/ está gitignored; nunca montar keys/ en otro
+      # servicio (el keyring público es infra/jwt-keyring/).
+      JWT_PRIVATE_KEY_FILE: /run/secrets/jwt_signing_private.pem
     ports:
       - "8080:8080"
     volumes:
       - .:/app
       - ${JWT_KEYRING_DIR:-../../infra/jwt-keyring}:/etc/jwt-keyring:ro
+      - ${JWT_PRIVATE_KEY_PATH:-./keys/jwt_signing_private.pem}:/run/secrets/jwt_signing_private.pem:ro
       - account_go_mod_cache:/go/pkg/mod
     # El bind mount de arriba trae el ownership del host (uid 1000), no el de `appuser` fijado en
     # build-time por el Dockerfile — sin esto, air no puede ni crear /app/tmp.

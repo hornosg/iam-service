@@ -33,12 +33,9 @@ func TestAuthModule_ValidateRouteNoExiste(t *testing.T) {
 	router := gin.New()
 	apiV1 := router.Group("/api/v1")
 
-	testSecret := "test-secret-0123456789abcdef" // fixture, no secreto real
-
-	jwtSvc := adapter.NewJWTServiceAdapter(testSecret, nil) // verificador dual fixture (ACC-E03 T4)
+	jwtSvc := adapter.NewJWTServiceAdapter(nil) // verificador dual fixture (ACC-E03 T4)
 	authRepoApp := config.SetupTokenRevocationGate(apiV1, nil, nil, jwtSvc)
 	config.SetupAuthModule(apiV1, nil, nil, authRepoApp, nil, nil, nil, jwtSvc, config.AuthModuleConfig{
-		JWTSecret:          testSecret,
 		AccessTokenExpiry:  15 * time.Minute,
 		RefreshTokenExpiry: 7 * 24 * time.Hour,
 		Namespace:          "mc",

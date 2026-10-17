@@ -7,8 +7,12 @@ package controller_test
 
 import (
 	"bytes"
+	"crypto/rand"
+	"crypto/rsa"
 	"encoding/json"
 	"errors"
+	"github.com/hornosg/iam-service/src/identity/infrastructure/adapter"
+	"github.com/hornosg/iam-service/src/identity/infrastructure/config"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -68,7 +72,7 @@ func newConfigRig(t *testing.T, w io.Writer) *configRig {
 		"whatsapp-agent": whatsappCfgKey,
 		"onboarding":     onboardingKey,
 	})
-	factory := authmw.NewScopeMiddlewareFactory(cfgJWTSecret, cfgNamespace, registry, nil)
+	factory := authmw.NewScopeMiddlewareFactory(cfgNamespace, registry, cfgVerifier())
 	ctrl := controller.NewTenantConfigController(
 		usecase.NewGetTenantConfigUseCase(repo),
 		usecase.NewSetTenantConfigUseCase(repo),
@@ -253,13 +257,28 @@ func TestConfigRoutes_BootstrapAudited(t *testing.T) {
 	})
 }
 
+// cfgTestKey firma los tokens humanos del test (ACC-E03 T6: el gate sólo
+// verifica RS256 por kid) y su pública alimenta la keyring del gate.
+var cfgTestKey = func() *rsa.PrivateKey {
+	k, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		panic(err)
+	}
+	return k
+}()
+
+func cfgVerifier() *adapter.JWTServiceAdapter {
+	return adapter.NewJWTServiceAdapter(&adapter.SigningKey{PrivateKey: cfgTestKey, KID: config.SigningKeyKID(&cfgTestKey.PublicKey)})
+}
+
 func humanToken(t *testing.T, tenantID uuid.UUID, roles ...string) string {
 	t.Helper()
-	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+	tok := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 		"user_id": uuid.NewString(), "tenant_id": tenantID.String(), "roles": roles,
 		"namespace": cfgNamespace, "exp": time.Now().Add(time.Hour).Unix(),
 	})
-	s, err := tok.SignedString([]byte(cfgJWTSecret))
+	tok.Header["kid"] = config.SigningKeyKID(&cfgTestKey.PublicKey)
+	s, err := tok.SignedString(cfgTestKey)
 	require.NoError(t, err)
 	return "Bearer " + s
 }

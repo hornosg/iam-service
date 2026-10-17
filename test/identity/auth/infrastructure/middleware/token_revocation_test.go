@@ -2,6 +2,7 @@ package middleware_test
 
 import (
 	"context"
+	"crypto/rsa"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -18,33 +19,22 @@ import (
 	"github.com/hornosg/iam-service/src/identity/domain/port"
 	"github.com/hornosg/iam-service/src/identity/domain/value_object"
 	"github.com/hornosg/iam-service/src/identity/infrastructure/adapter"
+	"github.com/hornosg/iam-service/src/identity/infrastructure/config"
 	"github.com/hornosg/iam-service/src/identity/infrastructure/middleware"
 	sharedctx "github.com/hornosg/iam-service/src/shared/context"
 	repo "github.com/hornosg/iam-service/test/identity/auth/infrastructure/persistence/repository"
 )
 
-// signingKey y altKey son fixtures de test (no secretos reales): los tokens
-// firmados acá sólo circulan dentro del test de revocación. Se asignan al
-// verificador dual via variable (no literal) para no chocar con el scanner
-// de secretos del hook pre-commit, que categoriza un literal como posible
-// secreto hardcodeado.
-const signingKey = "revocation-test-secret-0123456789"
-const altKey = "a-different-secret-0123456789-abcdef"
-
-// dualVerifier construye el verificador dual (ACC-E03 T4) con el secreto
-// legacy dado y sin clave asimétrica: los fixtures HS256 de este archivo
-// siguen validando en la ventana de cutover.
-func dualVerifier(secret string) port.JWTService {
-	return adapter.NewJWTServiceAdapter(secret, nil)
+// rsVerifier construye el verificador RS256 (ACC-E03 T6: la única rama de
+// verificación) con la pública de la clave dada en la keyring.
+func rsVerifier(k *rsa.PrivateKey) port.JWTService {
+	return adapter.NewJWTServiceAdapter(&adapter.SigningKey{PrivateKey: k, KID: config.SigningKeyKID(&k.PublicKey)})
 }
 
-// signToken firma un JWT HS256 válido con los claims dados.
+// signToken firma un JWT RS256 válido (kid de t4Key) con los claims dados.
 func signToken(t *testing.T, claims value_object.TokenClaims) string {
 	t.Helper()
-	c := &adapter.JWTClaims{TokenClaims: claims}
-	tok, err := jwt.NewWithClaims(jwt.SigningMethodHS256, c).SignedString([]byte(signingKey))
-	require.NoError(t, err)
-	return tok
+	return t4Sign(t, t4Key, claims)
 }
 
 // signNoneToken firma un JWT con alg "none" para forzar el rechazo del keyfunc
@@ -101,9 +91,9 @@ func doRequest(t *testing.T, r *gin.Engine, path, authHeader string) *httptest.R
 
 func TestTokenRevocation_ExcludedRoutesShortCircuit(t *testing.T) {
 	cfg := middleware.TokenRevocationConfig{
-		JWT:             dualVerifier(signingKey),
-		AuthRepo:        repo.NewMockAuthRepository(),
-		ExcludedRoutes:  []string{"/health", "/public/*"},
+		JWT:            rsVerifier(t4Key),
+		AuthRepo:       repo.NewMockAuthRepository(),
+		ExcludedRoutes: []string{"/health", "/public/*"},
 	}
 	r := newEngine(cfg)
 
@@ -127,7 +117,7 @@ func TestTokenRevocation_ExcludedRoutesShortCircuit(t *testing.T) {
 // --- caminos que delegan sin validar (next) ---
 
 func TestTokenRevocation_NoAuthHeader(t *testing.T) {
-	cfg := middleware.TokenRevocationConfig{JWT: dualVerifier(signingKey), AuthRepo: repo.NewMockAuthRepository()}
+	cfg := middleware.TokenRevocationConfig{JWT: rsVerifier(t4Key), AuthRepo: repo.NewMockAuthRepository()}
 	r := newEngine(cfg)
 	w := doRequest(t, r, "/api/x", "")
 	assert.Equal(t, http.StatusOK, w.Code)
@@ -135,7 +125,7 @@ func TestTokenRevocation_NoAuthHeader(t *testing.T) {
 }
 
 func TestTokenRevocation_NoBearerPrefix(t *testing.T) {
-	cfg := middleware.TokenRevocationConfig{JWT: dualVerifier(signingKey), AuthRepo: repo.NewMockAuthRepository()}
+	cfg := middleware.TokenRevocationConfig{JWT: rsVerifier(t4Key), AuthRepo: repo.NewMockAuthRepository()}
 	r := newEngine(cfg)
 	// Header sin "Bearer " => TrimPrefix no quita nada => tokenStr == authHeader => next.
 	w := doRequest(t, r, "/api/x", "Token abc")
@@ -146,7 +136,7 @@ func TestTokenRevocation_NoBearerPrefix(t *testing.T) {
 // TestTokenRevocation_NonHMACAlgRejected cubre la rama del keyfunc que rechaza
 // algoritmos no-HMAC (token.Method no es *SigningMethodHMAC => ErrSignatureInvalid).
 func TestTokenRevocation_NonHMACAlgRejected(t *testing.T) {
-	cfg := middleware.TokenRevocationConfig{JWT: dualVerifier(signingKey), AuthRepo: repo.NewMockAuthRepository()}
+	cfg := middleware.TokenRevocationConfig{JWT: rsVerifier(t4Key), AuthRepo: repo.NewMockAuthRepository()}
 	r := newEngine(cfg)
 	tok := signNoneToken(t, baseClaims(uuid.New()))
 	w := doRequest(t, r, "/api/x", "Bearer "+tok)
@@ -156,7 +146,7 @@ func TestTokenRevocation_NonHMACAlgRejected(t *testing.T) {
 
 func TestTokenRevocation_BadSignatureRejected(t *testing.T) {
 	// Middleware con secreto A; token firmado con secreto B => parse falla => next.
-	cfg := middleware.TokenRevocationConfig{JWT: dualVerifier(altKey), AuthRepo: repo.NewMockAuthRepository()}
+	cfg := middleware.TokenRevocationConfig{JWT: rsVerifier(t4OtherKey), AuthRepo: repo.NewMockAuthRepository()}
 	r := newEngine(cfg)
 	tok := signToken(t, baseClaims(uuid.New()))
 	w := doRequest(t, r, "/api/x", "Bearer "+tok)
@@ -168,7 +158,7 @@ func TestTokenRevocation_BadSignatureRejected(t *testing.T) {
 
 func TestTokenRevocation_ValidTokenNotRevoked(t *testing.T) {
 	claims := baseClaims(uuid.New())
-	cfg := middleware.TokenRevocationConfig{JWT: dualVerifier(signingKey), AuthRepo: repo.NewMockAuthRepository()}
+	cfg := middleware.TokenRevocationConfig{JWT: rsVerifier(t4Key), AuthRepo: repo.NewMockAuthRepository()}
 	r := newEngine(cfg)
 	tok := signToken(t, claims)
 	w := doRequest(t, r, "/api/x", "Bearer "+tok)
@@ -183,7 +173,7 @@ func TestTokenRevocation_RevokedTokenAborts401(t *testing.T) {
 	// Marcamos el JTI como revocado antes de la request.
 	require.NoError(t, mock.RevokeToken(context.Background(), jti, claims.UserID, time.Now().Add(time.Hour)))
 
-	cfg := middleware.TokenRevocationConfig{JWT: dualVerifier(signingKey), AuthRepo: mock}
+	cfg := middleware.TokenRevocationConfig{JWT: rsVerifier(t4Key), AuthRepo: mock}
 	r := newEngine(cfg)
 	tok := signToken(t, claims)
 	w := doRequest(t, r, "/api/x", "Bearer "+tok)
@@ -196,7 +186,7 @@ func TestTokenRevocation_NilJTISkipsRevocationCheck(t *testing.T) {
 	// JTI == uuid.Nil => no se consulta al repo (no hay JTI que revocar).
 	claims := baseClaims(uuid.Nil)
 	mock := repo.NewMockAuthRepository()
-	cfg := middleware.TokenRevocationConfig{JWT: dualVerifier(signingKey), AuthRepo: mock}
+	cfg := middleware.TokenRevocationConfig{JWT: rsVerifier(t4Key), AuthRepo: mock}
 	r := newEngine(cfg)
 	tok := signToken(t, claims)
 	w := doRequest(t, r, "/api/x", "Bearer "+tok)
@@ -214,7 +204,7 @@ func TestTokenRevocation_RepoErrorFailsClosed(t *testing.T) {
 	mock := repo.NewMockAuthRepository()
 	mock.ShouldFailOn("IsTokenRevoked")
 
-	cfg := middleware.TokenRevocationConfig{JWT: dualVerifier(signingKey), AuthRepo: mock}
+	cfg := middleware.TokenRevocationConfig{JWT: rsVerifier(t4Key), AuthRepo: mock}
 	r := newEngine(cfg)
 	tok := signToken(t, claims)
 	w := doRequest(t, r, "/api/x", "Bearer "+tok)
@@ -222,6 +212,7 @@ func TestTokenRevocation_RepoErrorFailsClosed(t *testing.T) {
 	// Abort impide correr el handler final => no se setea user_id.
 	assert.Empty(t, w.Header().Get("X-User-Id"))
 }
+
 // --- token legacy sin claim de tenant (ACC-E02 T8g, criterio (B) del gate de
 // T8f) ---
 
@@ -253,7 +244,7 @@ func legacyClaims(jti, userID uuid.UUID) value_object.TokenClaims {
 func TestTokenRevocation_LegacyTokenDerivesTenant(t *testing.T) {
 	claims := legacyClaims(uuid.New(), uuid.New())
 	resolver := &mockTenantResolver{tenant: uuid.New()}
-	cfg := middleware.TokenRevocationConfig{JWT: dualVerifier(signingKey), AuthRepo: repo.NewMockAuthRepository(), TenantResolver: resolver}
+	cfg := middleware.TokenRevocationConfig{JWT: rsVerifier(t4Key), AuthRepo: repo.NewMockAuthRepository(), TenantResolver: resolver}
 	r := newEngine(cfg)
 	tok := signToken(t, claims)
 	w := doRequest(t, r, "/api/x", "Bearer "+tok)
@@ -271,7 +262,7 @@ func TestTokenRevocation_LegacyTokenUnknownUser401(t *testing.T) {
 	// autorizar → 401, no 500 ni pass-through.
 	claims := legacyClaims(uuid.New(), uuid.New())
 	resolver := &mockTenantResolver{err: sharedservice.ErrUserNotFound}
-	cfg := middleware.TokenRevocationConfig{JWT: dualVerifier(signingKey), AuthRepo: repo.NewMockAuthRepository(), TenantResolver: resolver}
+	cfg := middleware.TokenRevocationConfig{JWT: rsVerifier(t4Key), AuthRepo: repo.NewMockAuthRepository(), TenantResolver: resolver}
 	r := newEngine(cfg)
 	tok := signToken(t, claims)
 	w := doRequest(t, r, "/api/x", "Bearer "+tok)
@@ -287,7 +278,7 @@ func TestTokenRevocation_LegacyTokenResolverError500(t *testing.T) {
 	// autoriza).
 	claims := legacyClaims(uuid.New(), uuid.New())
 	resolver := &mockTenantResolver{err: errors.New("db caída")}
-	cfg := middleware.TokenRevocationConfig{JWT: dualVerifier(signingKey), AuthRepo: repo.NewMockAuthRepository(), TenantResolver: resolver}
+	cfg := middleware.TokenRevocationConfig{JWT: rsVerifier(t4Key), AuthRepo: repo.NewMockAuthRepository(), TenantResolver: resolver}
 	r := newEngine(cfg)
 	tok := signToken(t, claims)
 	w := doRequest(t, r, "/api/x", "Bearer "+tok)
@@ -303,7 +294,7 @@ func TestTokenRevocation_LegacyTokenWithoutResolverSkipsDerivation(t *testing.T)
 	// pone la RLS del repo) y sigue consultando la revocación por JTI.
 	claims := legacyClaims(uuid.New(), uuid.New())
 	mock := repo.NewMockAuthRepository()
-	cfg := middleware.TokenRevocationConfig{JWT: dualVerifier(signingKey), AuthRepo: mock}
+	cfg := middleware.TokenRevocationConfig{JWT: rsVerifier(t4Key), AuthRepo: mock}
 	r := newEngine(cfg)
 	tok := signToken(t, claims)
 	w := doRequest(t, r, "/api/x", "Bearer "+tok)
@@ -319,7 +310,7 @@ func TestTokenRevocation_ClaimedTenantSkipsResolver(t *testing.T) {
 	// sólo para el caso legacy.
 	claims := baseClaims(uuid.New())
 	resolver := &mockTenantResolver{tenant: uuid.New()}
-	cfg := middleware.TokenRevocationConfig{JWT: dualVerifier(signingKey), AuthRepo: repo.NewMockAuthRepository(), TenantResolver: resolver}
+	cfg := middleware.TokenRevocationConfig{JWT: rsVerifier(t4Key), AuthRepo: repo.NewMockAuthRepository(), TenantResolver: resolver}
 	r := newEngine(cfg)
 	tok := signToken(t, claims)
 	w := doRequest(t, r, "/api/x", "Bearer "+tok)

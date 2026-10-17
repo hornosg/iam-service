@@ -338,7 +338,6 @@ func routerDePrueba(excluidas []string) (*gin.Engine, *bool) {
 	llegoAlHandler := false
 	r := gin.New()
 	r.Use(tenantmw.TenantValidation(tenantmw.TenantValidationConfig{
-		JWTSecret:      "secreto-de-test-t1b",
 		ExcludedRoutes: excluidas,
 	}))
 	r.GET("/api/v1/tenant/config/:key", func(c *gin.Context) {

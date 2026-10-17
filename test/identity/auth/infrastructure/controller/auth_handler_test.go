@@ -59,7 +59,7 @@ func newTestSigningKey() *adapter.SigningKey {
 }
 
 func newTestJWTService() *adapter.JWTServiceAdapter {
-	return adapter.NewJWTServiceAdapter("test-secret-key-at-least-32-chars-long!!", newTestSigningKey())
+	return adapter.NewJWTServiceAdapter(newTestSigningKey())
 }
 
 // --- Mocks de los ports que los usecases de auth necesitan ---

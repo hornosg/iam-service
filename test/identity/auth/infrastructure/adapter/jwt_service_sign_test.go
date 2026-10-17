@@ -68,7 +68,7 @@ func validTestClaims() value_object.TokenClaims {
 // y kid no vacío.
 func TestJWTServiceSignProducesRS256WithKID(t *testing.T) {
 	key, _ := newSigningFixture(t)
-	svc := adapter.NewJWTServiceAdapter(testLegacySecret, key)
+	svc := adapter.NewJWTServiceAdapter(key)
 
 	token, err := svc.Sign(&value_object.TokenClaims{})
 	require.NoError(t, err)
@@ -93,7 +93,7 @@ func TestJWTServiceSignProducesRS256WithKID(t *testing.T) {
 // mismos claims.
 func TestJWTServiceSignRoundTripPreservesClaims(t *testing.T) {
 	key, _ := newSigningFixture(t)
-	svc := adapter.NewJWTServiceAdapter(testLegacySecret, key)
+	svc := adapter.NewJWTServiceAdapter(key)
 	claims := validTestClaims()
 
 	token, err := svc.Sign(&claims)
@@ -112,26 +112,29 @@ func TestJWTServiceSignRoundTripPreservesClaims(t *testing.T) {
 // Caveat 2 de T2: Sign con signingKey nil falla explícito — nunca firma
 // "algo" con un firmador no configurado.
 func TestJWTServiceSignFailsWithoutSigningKey(t *testing.T) {
-	svc := adapter.NewJWTServiceAdapter(testLegacySecret, nil)
+	svc := adapter.NewJWTServiceAdapter(nil)
 
 	token, err := svc.Sign(&value_object.TokenClaims{})
 	assert.Error(t, err, "firmar sin clave configurada debe ser un error explícito")
 	assert.Empty(t, token)
 }
 
-// Aceptación dual (ADR-003 §f, rama HS256): durante la ventana de cutover un
-// token HS256 firmado con el secreto viejo sigue validando in-process.
-func TestJWTServiceParseAcceptsLegacyHS256(t *testing.T) {
+// ACC-E03 T6 criterio (c): tras el cutover, un token HS256 firmado con el
+// secreto viejo es rechazado por Parse y ParseIgnoringExpiry — sin claims.
+// Reemplaza al test de la ventana dual que lo aceptaba.
+func TestJWTServiceParseRejectsLegacyHS256(t *testing.T) {
 	key, _ := newSigningFixture(t)
-	svc := adapter.NewJWTServiceAdapter(testLegacySecret, key)
-	claims := validTestClaims()
+	svc := adapter.NewJWTServiceAdapter(key)
 
-	legacyToken, err := jwt.NewWithClaims(jwt.SigningMethodHS256, adapter.JWTClaims{TokenClaims: claims}).SignedString([]byte(testLegacySecret))
+	legacyToken, err := jwt.NewWithClaims(jwt.SigningMethodHS256, adapter.JWTClaims{TokenClaims: validTestClaims()}).SignedString([]byte(testLegacySecret))
 	require.NoError(t, err)
 
 	parsed, err := svc.Parse(legacyToken)
-	require.NoError(t, err, "la aceptación dual §f mantiene vivos los tokens HS256 del secreto viejo hasta T6")
-	assert.Equal(t, claims.UserID, parsed.UserID)
+	require.Error(t, err, "HS256 con el secreto viejo debe rechazarse tras T6")
+	assert.Nil(t, parsed)
+	parsed, err = svc.ParseIgnoringExpiry(legacyToken)
+	require.Error(t, err, "HS256 con el secreto viejo debe rechazarse también sin validar expiración")
+	assert.Nil(t, parsed)
 }
 
 // Criteria (b1): token alg:none → error, sin claims. Un verificador que no
@@ -145,10 +148,10 @@ func TestJWTServiceParseRejectsAlgNone(t *testing.T) {
 
 	for name, parse := range map[string]func(string) (*value_object.TokenClaims, error){
 		"Parse": func(s string) (*value_object.TokenClaims, error) {
-			return adapter.NewJWTServiceAdapter(testLegacySecret, key).Parse(s)
+			return adapter.NewJWTServiceAdapter(key).Parse(s)
 		},
 		"ParseIgnoringExpiry": func(s string) (*value_object.TokenClaims, error) {
-			return adapter.NewJWTServiceAdapter(testLegacySecret, key).ParseIgnoringExpiry(s)
+			return adapter.NewJWTServiceAdapter(key).ParseIgnoringExpiry(s)
 		},
 	} {
 		parsed, err := parse(unsigned)
@@ -170,7 +173,7 @@ func TestJWTServiceParseRejectsHS256SignedWithPublicKey(t *testing.T) {
 	confused, err := jwt.NewWithClaims(jwt.SigningMethodHS256, adapter.JWTClaims{TokenClaims: claims}).SignedString(pubPEM)
 	require.NoError(t, err)
 
-	svc := adapter.NewJWTServiceAdapter(testLegacySecret, key)
+	svc := adapter.NewJWTServiceAdapter(key)
 	parsed, err := svc.Parse(confused)
 	assert.Error(t, err, "un token HS256 firmado con la clave pública como secreto es la confusión RS/HS — debe fallar")
 	assert.Nil(t, parsed, "la confusión RS/HS no debe entregar claims")
@@ -188,7 +191,7 @@ func TestJWTServiceParseRejectsTokenSignedWithOtherKey(t *testing.T) {
 	forgedToken, err := forged.SignedString(other)
 	require.NoError(t, err)
 
-	svc := adapter.NewJWTServiceAdapter(testLegacySecret, key)
+	svc := adapter.NewJWTServiceAdapter(key)
 	parsed, err := svc.Parse(forgedToken)
 	assert.Error(t, err, "un token firmado con otra clave privada debe fallar verificación")
 	assert.Nil(t, parsed, "un token de otra clave no debe entregar claims")
@@ -203,7 +206,7 @@ func TestJWTServiceParseRejectsRS256WithoutKID(t *testing.T) {
 	token, err := jwt.NewWithClaims(jwt.SigningMethodRS256, adapter.JWTClaims{TokenClaims: claims}).SignedString(key.PrivateKey)
 	require.NoError(t, err)
 
-	svc := adapter.NewJWTServiceAdapter(testLegacySecret, key)
+	svc := adapter.NewJWTServiceAdapter(key)
 	parsed, err := svc.Parse(token)
 	assert.Error(t, err, "RS256 sin kid no es seleccionable por la regla dual §f")
 	assert.Nil(t, parsed)
@@ -215,7 +218,7 @@ func TestJWTServiceParseRejectsRS256WithoutKID(t *testing.T) {
 // aunque el boot sea dev (donde ValidateJWTSecret sólo advierte).
 func TestJWTServiceParseRejectsHS256WithEmptyLegacySecret(t *testing.T) {
 	key, _ := newSigningFixture(t)
-	svc := adapter.NewJWTServiceAdapter("", key) // sin secreto legacy configurado
+	svc := adapter.NewJWTServiceAdapter(key) // sin secreto legacy configurado
 	claims := validTestClaims()
 
 	// Firmado con secreto VACÍO: sin el guard, verificaría.

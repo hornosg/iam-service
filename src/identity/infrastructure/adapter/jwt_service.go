@@ -20,13 +20,10 @@ type SigningKey struct {
 	KID        string
 }
 
-// JWTServiceAdapter firma con RS256 + kid y verifica con aceptación dual
-// (ADR-003 §f): durante la ventana de cutover los tokens HS256 del secreto
-// viejo siguen validando in-process hasta que T6 retire la aceptación dual.
+// JWTServiceAdapter firma y verifica sólo con RS256 + kid (ADR-003). La
+// aceptación dual HS256 de la ventana de cutover se retiró en ACC-E03 T6:
+// el secreto simétrico compartido ya no firma ni verifica tokens de usuario.
 type JWTServiceAdapter struct {
-	// legacySecret verifica SOLO tokens HS256 (regla de selección dual §f).
-	// Jamás se usa como material de firma desde T3: el firmador es RS256.
-	legacySecret string
 	// signingKey firma con RS256 y fija el kid del header. nil → Sign falla
 	// explícito: en dev el boot no es fatal sin clave (caveat 2 de T2) y
 	// asumir que existe emitiría tokens con un firmador no configurado.
@@ -37,15 +34,13 @@ type JWTServiceAdapter struct {
 	publicKeys map[string]*rsa.PublicKey
 }
 
-// NewJWTServiceAdapter recibe el secreto simétrico viejo (verificación dual
-// HS256 hasta T6) y el par asimétrico de firma. signingKey puede ser nil en
-// desarrollo sin clave montada: en ese estado el adapter verifica pero NO
-// puede firmar.
-func NewJWTServiceAdapter(legacySecret string, signingKey *SigningKey) *JWTServiceAdapter {
+// NewJWTServiceAdapter recibe el par asimétrico de firma. signingKey puede
+// ser nil en desarrollo sin clave montada: en ese estado el adapter no firma
+// y rechaza todo token (keyring vacía → fail-closed).
+func NewJWTServiceAdapter(signingKey *SigningKey) *JWTServiceAdapter {
 	s := &JWTServiceAdapter{
-		legacySecret: legacySecret,
-		signingKey:   signingKey,
-		publicKeys:   map[string]*rsa.PublicKey{},
+		signingKey: signingKey,
+		publicKeys: map[string]*rsa.PublicKey{},
 	}
 	if signingKey != nil && signingKey.PrivateKey != nil {
 		s.publicKeys[signingKey.KID] = &signingKey.PrivateKey.PublicKey
@@ -65,40 +60,23 @@ func (s *JWTServiceAdapter) Sign(claims *value_object.TokenClaims) (string, erro
 	return token.SignedString(s.signingKey.PrivateKey)
 }
 
-// keyFunc implementa la regla de selección dual de ADR-003 §f:
-//
-//	alg HS256 → sólo el secreto viejo    alg RS256 → la pública por kid
-//	alg none / cualquier otro → rechazo
-//
-// La confusión RS/HS queda cerrada por construcción: la rama HMAC devuelve
-// únicamente el secreto legacy, nunca material de la clave pública; y la
-// rama RSA devuelve una *rsa.PublicKey, con la que golang-jwt sólo verifica
-// firma RSA. Un token HS256 "firmado" con el PEM público como secreto cae
-// en la rama HS256, se verifica contra el secreto viejo y falla.
+// keyFunc acepta sólo RS256 con un kid de la keyring (ADR-003 §f tras el
+// cutover de T6). HS256, alg none y cualquier otro método se rechazan: no
+// existe ya ningún secreto simétrico con el que verificar, así que la
+// confusión RS/HS no tiene rama por la que entrar.
 func (s *JWTServiceAdapter) keyFunc(t *jwt.Token) (interface{}, error) {
-	switch t.Method.Alg() {
-	case jwt.SigningMethodHS256.Alg():
-		// C2 del gate L4 de T3: un secreto vacío NO verifica. Sin el guard,
-		// un token HS256 "firmado" con secreto vacío pasaría acá. Defensa en
-		// profundidad sobre el ValidateJWTSecret del boot (que ya es fatal en
-		// release): el guard vive también en el keyFunc, no sólo en el boot.
-		if s.legacySecret == "" {
-			return nil, errors.New("token HS256 rechazado: secreto legacy no configurado")
-		}
-		return []byte(s.legacySecret), nil
-	case jwt.SigningMethodRS256.Alg():
-		kid, _ := t.Header["kid"].(string)
-		if kid == "" {
-			return nil, errors.New("token RS256 sin kid en el header")
-		}
-		pub, ok := s.publicKeys[kid]
-		if !ok {
-			return nil, fmt.Errorf("kid desconocido o retirado: %s", kid)
-		}
-		return pub, nil
-	default:
+	if t.Method.Alg() != jwt.SigningMethodRS256.Alg() {
 		return nil, fmt.Errorf("método de firma no aceptado: %v", t.Header["alg"])
 	}
+	kid, _ := t.Header["kid"].(string)
+	if kid == "" {
+		return nil, errors.New("token RS256 sin kid en el header")
+	}
+	pub, ok := s.publicKeys[kid]
+	if !ok {
+		return nil, fmt.Errorf("kid desconocido o retirado: %s", kid)
+	}
+	return pub, nil
 }
 
 // PublicKeyFor entrega la pública RSA activa por kid para los verificadores
@@ -125,13 +103,13 @@ func (s *JWTServiceAdapter) PublicKeyFor(kid string) (*rsa.PublicKey, bool) {
 	return pub, ok
 }
 
-// dualAcceptedMethods es el doble control del keyFunc: WithValidMethods hace
-// que el parser rechace alg fuera de {HS256, RS256} ANTES de pedir la clave.
-var dualAcceptedMethods = []string{jwt.SigningMethodHS256.Alg(), jwt.SigningMethodRS256.Alg()}
+// acceptedMethods es el doble control del keyFunc: WithValidMethods hace que
+// el parser rechace cualquier alg distinto de RS256 ANTES de pedir la clave.
+var acceptedMethods = []string{jwt.SigningMethodRS256.Alg()}
 
 func (s *JWTServiceAdapter) Parse(tokenString string) (*value_object.TokenClaims, error) {
 	jwtClaims := &JWTClaims{}
-	token, err := jwt.NewParser(jwt.WithValidMethods(dualAcceptedMethods)).ParseWithClaims(tokenString, jwtClaims, s.keyFunc)
+	token, err := jwt.NewParser(jwt.WithValidMethods(acceptedMethods)).ParseWithClaims(tokenString, jwtClaims, s.keyFunc)
 	if err != nil {
 		return nil, fmt.Errorf("error parseando token: %w", err)
 	}
@@ -142,14 +120,14 @@ func (s *JWTServiceAdapter) Parse(tokenString string) (*value_object.TokenClaims
 	return &tc, nil
 }
 
-// ParseIgnoringExpiry verifica la firma (dual, misma regla §f) y devuelve los
+// ParseIgnoringExpiry verifica la firma (RS256 por kid, misma regla §f) y devuelve los
 // claims SIN validar expiración (v5: WithoutClaimsValidation).
 // Sólo para el presenter opcional de POST /auth/refresh (ACC-E02 T8e).
 func (s *JWTServiceAdapter) ParseIgnoringExpiry(tokenString string) (*value_object.TokenClaims, error) {
 	jwtClaims := &JWTClaims{}
 	token, err := jwt.NewParser(
 		jwt.WithoutClaimsValidation(),
-		jwt.WithValidMethods(dualAcceptedMethods),
+		jwt.WithValidMethods(acceptedMethods),
 	).ParseWithClaims(tokenString, jwtClaims, s.keyFunc)
 	if err != nil {
 		return nil, fmt.Errorf("error parseando token (sin validar expiración): %w", err)

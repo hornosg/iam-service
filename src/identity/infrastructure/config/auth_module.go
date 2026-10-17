@@ -27,7 +27,6 @@ const (
 
 // AuthModuleConfig contiene la configuración para el módulo de autenticación
 type AuthModuleConfig struct {
-	JWTSecret          string
 	AccessTokenExpiry  time.Duration
 	RefreshTokenExpiry time.Duration
 	Namespace          string
@@ -39,27 +38,18 @@ type AuthModuleConfig struct {
 }
 
 // NewAuthModuleConfigFromEnv crea la configuración leyendo variables de entorno y valida seguridad.
-// En producción hace log.Fatal si JWT_SECRET es inseguro; en desarrollo solo muestra warning.
+// ACC-E03 T6: JWT_SECRET ya no se lee ni valida (HS256 retirado).
 // ACC-E03 T2: la clave de firma asimétrica sigue el MISMO patrón (fatal en release,
 // warning en desarrollo) vía LoadSigningKeyFromEnv.
 func NewAuthModuleConfigFromEnv() AuthModuleConfig {
-	jwtSecret := os.Getenv("JWT_SECRET")
-
 	ginMode := os.Getenv("GIN_MODE")
-
-	if err := ValidateJWTSecret(jwtSecret); err != nil {
-		if ginMode == "release" {
-			log.Fatalf("SECURITY: %v", err)
-		}
-		log.Printf("SECURITY WARNING: %v (allowed in development mode)", err)
-	}
 
 	signingKey, err := LoadSigningKeyFromEnv()
 	if err != nil {
 		if ginMode == "release" {
 			log.Fatalf("SECURITY: %v", err)
 		}
-		log.Printf("SECURITY WARNING: %v (allowed in development mode — HS256 seguirá firmando hasta ACC-E03 T3)", err)
+		log.Printf("SECURITY WARNING: %v (allowed in development mode)", err)
 	}
 
 	googleClientID := os.Getenv("GOOGLE_CLIENT_ID")
@@ -70,7 +60,6 @@ func NewAuthModuleConfigFromEnv() AuthModuleConfig {
 	}
 
 	return AuthModuleConfig{
-		JWTSecret:          jwtSecret,
 		AccessTokenExpiry:  15 * time.Minute,
 		RefreshTokenExpiry: 7 * 24 * time.Hour,
 		Namespace:          namespace,
