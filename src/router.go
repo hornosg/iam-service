@@ -178,15 +178,15 @@ func buildRouter(appDB *sql.DB, loginDB *sql.DB) *gin.Engine {
 	// ACC-E03 T4: la config (que carga la clave de firma) y el verificador dual
 	// se crean ANTES del gate de revocación, para que firmador, gate de
 	// revocación y gate authorize (vía PublicKeyFor) compartan UNA sola
-	// instancia y UNA keyring — la rotación (T8) agrega la clave en gracia una
-	// sola vez. El orden con respecto a los grupos es el de T8g: el gate se
+	// instancia y UNA keyring — la rotación (T8) carga la clave en gracia una
+	// sola vez, desde JWT_PUBLIC_KEY_DIR. El orden con respecto a los grupos es el de T8g: el gate se
 	// registra sobre apiV1 antes de crear los grupos de gestión.
 	var authRepoApp port.AuthRepository
 	var authConfig config.AuthModuleConfig
 	var signingVerifier *adapter.JWTServiceAdapter
 	if !disabled["identity"] {
 		authConfig = config.NewAuthModuleConfigFromEnv()
-		signingVerifier = adapter.NewJWTServiceAdapter(authConfig.SigningKey)
+		signingVerifier = adapter.NewJWTServiceAdapterWithKeyring(authConfig.SigningKey, authConfig.VerificationKeys)
 		// ACC-E03 T7: JWKS público en la raíz (fuera de /api/v1, sin gate de
 		// revocación ni authorize). Publica la keyring de ESTE verificador, así
 		// lo que se publica es exactamente lo que se acepta (ADR-003 §c/§d).

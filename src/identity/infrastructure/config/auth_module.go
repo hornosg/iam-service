@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"crypto/rsa"
 	"database/sql"
 	"fmt"
 	"log"
@@ -35,6 +36,9 @@ type AuthModuleConfig struct {
 	// T3 no consuma la firma asimétrica; en GIN_MODE=release la validación de
 	// arranque es fatal si falta (mismo patrón que JWT_SECRET).
 	SigningKey *SigningKey
+	// VerificationKeys son las públicas del keyring JWT_PUBLIC_KEY_DIR
+	// (ACC-E03 T8): en una rotación, la clave en gracia. Nil sin keyring.
+	VerificationKeys map[string]*rsa.PublicKey
 }
 
 // NewAuthModuleConfigFromEnv crea la configuración leyendo variables de entorno y valida seguridad.
@@ -52,6 +56,24 @@ func NewAuthModuleConfigFromEnv() AuthModuleConfig {
 		log.Printf("SECURITY WARNING: %v (allowed in development mode)", err)
 	}
 
+	// ACC-E03 T8: keyring de verificación (claves en gracia). Mismo patrón:
+	// roto → fatal en release (config rota no arranca), warning en desarrollo.
+	verificationKeys, err := LoadVerificationKeyringFromEnv()
+	if err != nil {
+		if ginMode == "release" {
+			log.Fatalf("SECURITY: %v", err)
+		}
+		log.Printf("SECURITY WARNING: %v (allowed in development mode)", err)
+	}
+	// Paso "publicar" de ADR-003 §c: la pública de firma tiene que estar en el
+	// keyring de la flota ANTES de firmar con ella; si no, sólo iam acepta
+	// sus tokens y la flota responde 401.
+	if signingKey != nil && verificationKeys != nil {
+		if _, ok := verificationKeys[signingKey.KID]; !ok {
+			log.Printf("SECURITY WARNING: signing kid %s is not published in JWT_PUBLIC_KEY_DIR — fleet verifiers will reject its tokens (ADR-003 §c: publish before sign)", signingKey.KID)
+		}
+	}
+
 	googleClientID := os.Getenv("GOOGLE_CLIENT_ID")
 
 	namespace := os.Getenv("SERVICE_NAMESPACE")
@@ -65,6 +87,7 @@ func NewAuthModuleConfigFromEnv() AuthModuleConfig {
 		Namespace:          namespace,
 		GoogleClientID:     googleClientID,
 		SigningKey:         signingKey,
+		VerificationKeys:   verificationKeys,
 	}
 }
 

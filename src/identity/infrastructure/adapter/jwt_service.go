@@ -29,8 +29,15 @@ type JWTServiceAdapter struct {
 	// asumir que existe emitiría tokens con un firmador no configurado.
 	signingKey *SigningKey
 	// publicKeys resuelve un token RS256 por el kid de su header (§f: la
-	// selección es por header, nunca por intento y error). Hoy una sola
-	// entrada; la rotación con solapamiento (T8) agrega la clave en gracia.
+	// selección es por header, nunca por intento y error). Contiene la pública
+	// de firma más las del keyring montado (JWT_PUBLIC_KEY_DIR) — en una
+	// rotación, la clave en gracia (ACC-E03 T8, ADR-003 §c).
+	//
+	// Inmutable tras el constructor (condición C2 de T7): Parse, PublicKeyFor
+	// y el handler del JWKS la leen concurrentemente y nadie la escribe; rotar
+	// es cambiar los archivos del keyring y recrear el servicio. Si algún día
+	// se recarga en caliente, el swap tiene que ser atómico (un map de Go
+	// leído y escrito a la vez es un fatal que gin.Recovery no atrapa).
 	publicKeys map[string]*rsa.PublicKey
 }
 
@@ -38,9 +45,28 @@ type JWTServiceAdapter struct {
 // ser nil en desarrollo sin clave montada: en ese estado el adapter no firma
 // y rechaza todo token (keyring vacía → fail-closed).
 func NewJWTServiceAdapter(signingKey *SigningKey) *JWTServiceAdapter {
+	return NewJWTServiceAdapterWithKeyring(signingKey, nil)
+}
+
+// NewJWTServiceAdapterWithKeyring suma a la pública de firma las públicas del
+// keyring de verificación (ACC-E03 T8, condición C1 de T7). El tipo del
+// parámetro es *rsa.PublicKey: por construcción no entra material privado. Es
+// la carga de claves en gracia del ciclo publicar → firmar → gracia → retirar
+// (ADR-003 §c): Parse, token_revocation, authorize (vía PublicKeyFor) y el
+// JWKS ven la MISMA keyring, así lo publicado es exactamente lo aceptado.
+//
+// Retirar una clave = sacarla del keyring y recrear: si no es la de firma,
+// desaparece de publicKeys y sus tokens dan "kid desconocido o retirado".
+// El map recibido se copia — mutarlo después no altera al verificador.
+func NewJWTServiceAdapterWithKeyring(signingKey *SigningKey, keyring map[string]*rsa.PublicKey) *JWTServiceAdapter {
 	s := &JWTServiceAdapter{
 		signingKey: signingKey,
-		publicKeys: map[string]*rsa.PublicKey{},
+		publicKeys: make(map[string]*rsa.PublicKey, len(keyring)+1),
+	}
+	for kid, pub := range keyring {
+		if kid != "" && pub != nil {
+			s.publicKeys[kid] = pub
+		}
 	}
 	if signingKey != nil && signingKey.PrivateKey != nil {
 		s.publicKeys[signingKey.KID] = &signingKey.PrivateKey.PublicKey
@@ -82,7 +108,7 @@ func (s *JWTServiceAdapter) keyFunc(t *jwt.Token) (interface{}, error) {
 // PublicKeyFor entrega la pública RSA activa por kid para los verificadores
 // que no parsean a través de este adapter (ACC-E03 T4: el gate `authorize` de
 // access, que mantiene su parse MapClaims propio). Es la misma keyring que el
-// keyFunc de arriba — la rotación (T8) agrega entradas acá una sola vez.
+// keyFunc de arriba — la rotación (T8) la carga una sola vez en el constructor.
 // Devuelve false si el kid es desconocido o retirado: fail-closed.
 //
 // ACC-E03 T4b — el receptor nil tolera el nil (forma 2 del contrato de la

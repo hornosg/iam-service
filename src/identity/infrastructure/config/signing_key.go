@@ -12,6 +12,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/hornosg/go-shared/infrastructure/jwtkeyring"
+
 	"github.com/hornosg/iam-service/src/identity/infrastructure/adapter"
 )
 
@@ -155,6 +157,29 @@ func bigIntBytes(v int) []byte {
 		v >>= 8
 	}
 	return b[i:]
+}
+
+// LoadVerificationKeyringFromEnv carga las públicas del keyring de la flota
+// (JWT_PUBLIC_KEY_DIR, el mismo directorio que monta go-shared) para que el
+// verificador de iam acepte las claves en gracia de una rotación (ACC-E03 T8,
+// ADR-003 §c). Reusa jwtkeyring.Load: sólo PEM "PUBLIC KEY" RSA ≥2048 (un PEM
+// privado puesto por error es error de arranque), kid DERIVADO del material,
+// kids duplicados rechazados. Var vacía → (nil, nil): sólo la pública de firma.
+func LoadVerificationKeyringFromEnv() (map[string]*rsa.PublicKey, error) {
+	dir := os.Getenv("JWT_PUBLIC_KEY_DIR")
+	if dir == "" {
+		return nil, nil
+	}
+	ring, err := jwtkeyring.Load(dir)
+	if err != nil {
+		return nil, fmt.Errorf("verification keyring: %w", err)
+	}
+	keys := make(map[string]*rsa.PublicKey, len(ring.KIDs()))
+	for _, kid := range ring.KIDs() {
+		pub, _ := ring.PublicKeyFor(kid)
+		keys[kid] = pub
+	}
+	return keys, nil
 }
 
 // La generación del par NO vive en el runtime — la clave llega montada

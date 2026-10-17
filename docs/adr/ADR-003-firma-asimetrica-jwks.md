@@ -98,6 +98,29 @@ la que sí necesita (el JWKS lo consumen herramientas Go, agentes y frontends aj
      vieja sigue validando hasta su expiración natural.
   4. **Retirar**: sacar la clave vieja del JWKS y del keyring de los verificadores; desde ese
      momento los tokens `kid` viejo se rechazan.
+- **Esperas de propagación (ACC-E03 T8, condición C3 del veredicto de T7).** El JWKS se sirve con
+  `Cache-Control: public, max-age=300`. Por eso:
+  - **Entre publicar y firmar: ≥ 300 s.** Un consumidor JWKS que cacheó el documento justo antes de
+    publicar no conoce `kid2` hasta que su copia expira; firmar antes deja sus tokens `kid2` en 401
+    en ese consumidor durante hasta 5 minutos. Los verificadores de keyring montado (iam y la flota
+    go-shared) no cachean: ven `kid2` al recrearse.
+  - **Cola de revocación de 5 minutos.** Ante una clave comprometida, retirarla del keyring corta en
+    iam y en la flota al recrear, pero un consumidor JWKS con el documento cacheado puede seguir
+    aceptándola **hasta 5 minutos** más. Es el límite superior de exposición post-retiro para esos
+    consumidores; si alguno lo necesita más corto, baja el `max-age`, no se saltea el retiro.
+- **Mecánica en iam (T8, condiciones C1/C2).** El verificador de iam carga, además de la pública de
+  firma, las públicas de `JWT_PUBLIC_KEY_DIR` (el mismo keyring montado de la flota, vía
+  `jwtkeyring.Load` de go-shared: sólo `PUBLIC KEY` RSA ≥2048, kid derivado del material). Es una
+  sola keyring, inmutable tras el arranque, compartida por `Parse`, `token_revocation`, `authorize`
+  y el JWKS — lo publicado es lo aceptado. Retirar = sacar el `.pem` del keyring y recrear iam **y
+  la flota** (condición C4). Simulacro: `test/identity/auth/rotation/rotation_t8_test.go` +
+  bitácora de ACC-E03 (2026-10-17).
+- **Escribir en el keyring equivale a poseer la privada de firma (T8, condición C-T8-4 del gate L4).**
+  Desde T8 cualquier `.pem` público del directorio también es aceptado por iam, incluido su plano de
+  administración (`/users`, `/tenants`, `/roles`, `/plans`) con `system_admin`, no sólo por la flota.
+  Requisito de despliegue en producción (k3s): el ConfigMap/Secret del keyring debe tener un RBAC de
+  escritura tan restrictivo como el Secret de la clave privada. En el lab el directorio es del uid del
+  host, que ya lee la privada, por lo que no hay escalada.
 - Kong consume PEM estático por credencial (§e): en una rotación, la credencial de
   `iam-service-consumer` se re-templatiza con la pública nueva y se hace rebuild+recreate en el
   mismo paso "publicar→firmar". **No hay dual de borde en rotación** (misma restricción que el
