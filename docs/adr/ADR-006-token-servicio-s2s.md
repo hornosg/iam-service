@@ -161,10 +161,13 @@ servicio **y** la autorización del usuario cuando el caso de uso es de usuario.
   rechaza antes de verificar; ningún `jti` de una aserción sin verificar se escribe.
 - iam rechaza con **401** una aserción inválida, vencida o con `jti` ya visto; con **403** un `audience`
   o `scope` fuera del registro del emisor, o `tenant_scope=system` no habilitado.
-- **Exposición del endpoint**: se alcanza sólo por `lab-network` directo o por una ruta de Kong
-  **dedicada**, sin `jwt`, con rate limit, que no es la `/iam/` pública ni cambia con el corte de T8.
-  `/iam/api/v1/s2s/token` por el catch-all público de Kong responde 404 (T2 agrega la ruta de bloqueo y
-  una prueba que lo verifica).
+- **Exposición del endpoint**: se alcanza **sólo directo por `lab-network`**; no hay ruta de emisión en
+  Kong (decisión de T2 tras la revisión L4, O-1: detrás de Kong todo el tráfico comparte la IP del
+  gateway y un solo cliente anónimo agotaría el cupo pre-auth por IP de todos los emisores). El
+  catch-all público `/iam/` no lo alcanza: `/iam/api/v1/s2s` responde 404 en el borde (bloqueo con
+  `request-termination`, traba `tests/s2s-token-config.py`). El cupo pre-auth usa la IP de socket
+  (`RemoteIP`), nunca `X-Forwarded-For`. Antes de T4, el puerto 8080 de iam deja de publicarse en
+  todas las interfaces del host o la excepción queda escrita (N-6).
 - **Rate limit pre-auth**: por IP de origen más un tope global; el cupo **por emisor** se descuenta
   recién después de verificar la firma, para que quien envía basura con `iss=<otro servicio>` no agote el
   cupo de ese servicio. El `iss` sin verificar nunca es clave de un contador.
@@ -176,7 +179,7 @@ servicio **y** la autorización del usuario cuando el caso de uso es de usuario.
 - TTL del token: **300 s**. Como el token no depende de ningún usuario, el cliente de go-shared (T3) lo
   cachea por **`(aud, scope)`** y lo renueva a los `exp − 60 s`; ante 401 del receptor descarta la
   entrada y re-emite una sola vez. Una emisión por destino cada ~4 minutos, no una por usuario.
-- Auditoría: cada emisión loguea `sub`, `aud`, `scope`, `tenant_scope`, `jti`, `kid`. **Nunca** el token
+- Auditoría: cada emisión rechazada deja el evento `s2s_token_rejected` (motivo, `sub` si la firma ya se verificó, `aud` y `scope` pedidos, escapados y truncados); no se auditan el 429 previo a la autenticación, el cuerpo mal formado ni el 503 sin clave de firma, porque no hay `sub` verificado. Cada emisión loguea `sub`, `aud`, `scope`, `tenant_scope`, `jti`, `kid`. **Nunca** el token
   ni la aserción.
 
 ## Registro

@@ -49,6 +49,7 @@ func routesVerifier() *adapter.JWTServiceAdapter {
 func signRoleToken(t *testing.T, roles []string) string {
 	t.Helper()
 	claims := jwt.MapClaims{
+		"iss":       "iam-service", // ACC-E09 T2: todo token de usuario real lo lleva
 		"namespace": routesTestNS,
 		"user_id":   "123e4567-e89b-12d3-a456-426614174000",
 		"tenant_id": "123e4567-e89b-12d3-a456-426614174003",

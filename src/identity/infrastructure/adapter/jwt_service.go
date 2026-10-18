@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/hornosg/go-shared/infrastructure/s2stoken"
 
 	"github.com/hornosg/iam-service/src/identity/domain/value_object"
 )
@@ -142,8 +143,7 @@ func (s *JWTServiceAdapter) Parse(tokenString string) (*value_object.TokenClaims
 	if !token.Valid {
 		return nil, errors.New("token inválido")
 	}
-	tc := jwtClaims.TokenClaims
-	return &tc, nil
+	return userClaims(jwtClaims)
 }
 
 // ParseIgnoringExpiry verifica la firma (RS256 por kid, misma regla §f) y devuelve los
@@ -161,6 +161,23 @@ func (s *JWTServiceAdapter) ParseIgnoringExpiry(tokenString string) (*value_obje
 	if !token.Valid {
 		return nil, errors.New("token inválido")
 	}
-	tc := jwtClaims.TokenClaims
+	return userClaims(jwtClaims)
+}
+
+// errNotUserToken es el rechazo de la separación de tipos de token (ADR-006,
+// ACC-E09 T2): el token de servicio se firma con la MISMA clave de iam, así que
+// sin este corte valdría como token de usuario en cualquier ruta.
+var errNotUserToken = errors.New("token rechazado: no es un token de usuario de iam")
+
+// userClaims es el ÚNICO punto del adapter donde se decide si un token con firma
+// válida es de usuario: Parse y ParseIgnoringExpiry (y por ellos
+// token_revocation) pasan por acá. Rechaza `token_use=service` y exige
+// `iss=iam-service`; las constantes vienen del núcleo s2stoken de go-shared
+// (T3a), nunca de literales locales.
+func userClaims(c *JWTClaims) (*value_object.TokenClaims, error) {
+	if c.TokenUse == s2stoken.TokenUse || c.Issuer != s2stoken.UserIssuer {
+		return nil, errNotUserToken
+	}
+	tc := c.TokenClaims
 	return &tc, nil
 }

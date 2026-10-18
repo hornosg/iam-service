@@ -69,6 +69,7 @@ func newEngine(cfg middleware.TokenRevocationConfig) *gin.Engine {
 
 func baseClaims(jti uuid.UUID) value_object.TokenClaims {
 	return value_object.TokenClaims{
+		Issuer:    "iam-service", // ACC-E09 T2
 		JTI:       jti,
 		UserID:    uuid.New(),
 		TenantID:  uuid.New(),
@@ -234,6 +235,7 @@ func (m *mockTenantResolver) ResolveTenantByUserID(_ context.Context, _ uuid.UUI
 // tenant_id existiera: user_id y jti válidos, tenant en zero-value.
 func legacyClaims(jti, userID uuid.UUID) value_object.TokenClaims {
 	return value_object.TokenClaims{
+		Issuer:    "iam-service", // ACC-E09 T2
 		JTI:       jti,
 		UserID:    userID,
 		TenantID:  uuid.Nil,

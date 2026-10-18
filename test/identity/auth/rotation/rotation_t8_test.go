@@ -123,6 +123,7 @@ func deploy(t *testing.T, signer *rsa.PrivateKey, dir string) deployment {
 func (d deployment) login(t *testing.T) string {
 	t.Helper()
 	tok, err := d.verifier.Sign(&value_object.TokenClaims{
+		Issuer:    "iam-service", // ACC-E09 T2
 		JTI:       uuid.New(),
 		Namespace: namespace,
 		UserID:    uuid.New(),

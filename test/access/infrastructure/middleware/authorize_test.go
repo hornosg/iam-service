@@ -79,6 +79,7 @@ func newRouter(t *testing.T) (*gin.Engine, *map[string]bool) {
 func makeToken(t *testing.T, roles []string, extraClaims map[string]interface{}) string {
 	t.Helper()
 	claims := jwt.MapClaims{
+		"iss":       "iam-service", // ACC-E09 T2: todo token de usuario real lo lleva
 		"user_id":   uuid.New().String(),
 		"tenant_id": uuid.New().String(),
 		"roles":     roles,

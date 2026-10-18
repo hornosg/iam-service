@@ -18,6 +18,7 @@ POST /api/v1/tenants
 POST /api/v1/tenants/:id/plan
 POST /api/v1/tenant/config
 POST /api/v1/tenant/bootstrap
+POST /api/v1/s2s/token
 POST /api/v1/users
 POST /api/v1/plans
 POST /api/v1/roles

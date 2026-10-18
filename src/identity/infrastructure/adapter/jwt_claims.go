@@ -11,6 +11,11 @@ import (
 // JWTClaims wraps TokenClaims to implement jwt.Claims, keeping jwt library out of domain.
 type JWTClaims struct {
 	value_object.TokenClaims
+	// TokenUse sólo se lee, nunca se firma (omitempty): existe para que el
+	// verificador de usuario reconozca y rechace un token de servicio
+	// (`token_use=service`, ADR-006 "Separación de tipos de token"). No entra en
+	// el value object TokenClaims porque los claims de servicio no son de usuario.
+	TokenUse string `json:"token_use,omitempty"`
 }
 
 func (c JWTClaims) GetExpirationTime() (*jwt.NumericDate, error) {

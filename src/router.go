@@ -14,6 +14,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/hornosg/go-shared/infrastructure/env"
@@ -29,6 +30,7 @@ import (
 	"github.com/hornosg/iam-service/src/identity/infrastructure/adapter"
 	"github.com/hornosg/iam-service/src/identity/infrastructure/config"
 	identityctl "github.com/hornosg/iam-service/src/identity/infrastructure/controller"
+	accessctl "github.com/hornosg/iam-service/src/access/infrastructure/controller"
 	authmw "github.com/hornosg/iam-service/src/access/infrastructure/middleware"
 	"github.com/hornosg/iam-service/src/access/infrastructure/s2s"
 	planConfig "github.com/hornosg/iam-service/src/plans/infrastructure/config"
@@ -59,6 +61,9 @@ func buildRouter(appDB *sql.DB, loginDB *sql.DB) *gin.Engine {
 			"/metrics",
 			// ACC-E03 T7: JWKS público (ADR-003 §d) — material público, sin JWT.
 			identityctl.JWKSPath,
+			// ACC-E09 T2: emisión del token de servicio (ADR-006). El emisor se autentica con
+			// una aserción private_key_jwt, no con un JWT de usuario; ruta exacta, no prefijo.
+			accessctl.ServiceTokenPath,
 			"/api/v1/auth/*",
 			"/api/v1/tenants*",
 			"/api/v1/users*",
@@ -192,6 +197,29 @@ func buildRouter(appDB *sql.DB, loginDB *sql.DB) *gin.Engine {
 		// lo que se publica es exactamente lo que se acepta (ADR-003 §c/§d).
 		router.GET(identityctl.JWKSPath, identityctl.JWKSHandler(signingVerifier))
 		authRepoApp = config.SetupTokenRevocationGate(apiV1, appDB, loginDB, signingVerifier)
+	}
+
+	// ACC-E09 T2: emisión del token de servicio (ADR-006), módulo access. Se monta en el engine
+	// (como el JWKS), fuera de apiV1: no pasa por el gate de revocación ni por authorize, que son
+	// de tokens de usuario. Firma con la clave vigente del mismo keyring (mismo kid, mismo JWKS);
+	// el registro de públicas de emisores es propio y disjunto del keyring de verificación.
+	if !disabled["access"] && !disabled["identity"] {
+		stCfg := roleConfig.ServiceTokenModuleConfig{
+			DB:            appDB,
+			IssuerKeysDir: os.Getenv("S2S_ISSUER_KEYS_DIR"),
+			PurgeEvery:    5 * time.Minute,
+		}
+		for kid := range authConfig.VerificationKeys {
+			stCfg.VerificationKIDs = append(stCfg.VerificationKIDs, kid)
+		}
+		if authConfig.SigningKey != nil {
+			stCfg.SigningKey = authConfig.SigningKey.PrivateKey
+			stCfg.SigningKID = authConfig.SigningKey.KID
+			stCfg.VerificationKIDs = append(stCfg.VerificationKIDs, authConfig.SigningKey.KID)
+		}
+		if err := roleConfig.SetupServiceTokenModule(router, stCfg); err != nil {
+			log.Fatalf("SECURITY: %v", err)
+		}
 	}
 
 	authFactory := authmw.NewScopeMiddlewareFactory(serviceNamespace, s2sRegistry, signingVerifier)

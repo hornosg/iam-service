@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"github.com/hornosg/go-shared/infrastructure/s2stoken"
 
 	"github.com/hornosg/iam-service/src/access/infrastructure/s2s"
 	sharedctx "github.com/hornosg/iam-service/src/shared/context"
@@ -146,6 +147,18 @@ func Authorize(namespace string, registry *s2s.Registry, publicKeys PublicKeyRes
 			return pub, nil
 		})
 		if err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token"})
+			return
+		}
+		// ACC-E09 T2 (ADR-006): el token de servicio comparte la clave de firma
+		// de iam; este gate sólo acepta tokens de usuario. Mismo corte que el
+		// único punto del adapter de identity (userClaims), con las constantes
+		// de go-shared: access no importa identity.
+		if use, _ := claims["token_use"].(string); use == s2stoken.TokenUse {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token"})
+			return
+		}
+		if iss, _ := claims["iss"].(string); iss != s2stoken.UserIssuer {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token"})
 			return
 		}

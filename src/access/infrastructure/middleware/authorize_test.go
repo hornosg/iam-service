@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/hornosg/go-shared/infrastructure/s2stoken"
 
 	"github.com/hornosg/iam-service/src/access/infrastructure/s2s"
 )
@@ -50,9 +51,17 @@ func (testResolver) PublicKeyFor(kid string) (*rsa.PublicKey, bool) {
 }
 
 // signToken firma un JWT RS256 (kid testKID) con los claims dados (namespace + roles).
+// Lleva `iss=iam-service` como todo token de usuario real (NewTokenClaims).
 func signToken(t *testing.T, namespace string, roles []string) string {
+	return signTokenWith(t, namespace, roles, nil)
+}
+
+// signTokenWith permite pisar o quitar claims (valor nil = quitar) para los
+// negativos de la separación de tipos de token (ACC-E09 T2, ADR-006).
+func signTokenWith(t *testing.T, namespace string, roles []string, extra map[string]interface{}) string {
 	t.Helper()
 	claims := jwt.MapClaims{
+		"iss":       s2stoken.UserIssuer,
 		"namespace": namespace,
 		"user_id":   "123e4567-e89b-12d3-a456-426614174000",
 		"tenant_id": "123e4567-e89b-12d3-a456-426614174003",
@@ -60,6 +69,13 @@ func signToken(t *testing.T, namespace string, roles []string) string {
 	}
 	if roles != nil {
 		claims["roles"] = roles
+	}
+	for k, v := range extra {
+		if v == nil {
+			delete(claims, k)
+			continue
+		}
+		claims[k] = v
 	}
 	jt := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
 	jt.Header["kid"] = testKID
@@ -166,6 +182,48 @@ func TestAuthorize(t *testing.T) {
 				r.Header.Set("Authorization", "Bearer "+signToken(t, "otro", []string{"system_admin"}))
 			},
 			wantStatus: http.StatusForbidden,
+		},
+		{
+			// ACC-E09 T2: un token de servicio firmado con la clave de iam y con
+			// rol forjado no pasa el gate de usuario.
+			name:    "token de servicio (token_use=service) con rol -> 401",
+			scope:   s2s.ScopeSystemAdmin,
+			allowed: []string{"system_admin"},
+			setHeaders: func(r *http.Request) {
+				r.Header.Set("Authorization", "Bearer "+signTokenWith(t, testNS, []string{"system_admin"},
+					map[string]interface{}{"token_use": s2stoken.TokenUse, "iss": s2stoken.Issuer}))
+			},
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name:    "token_use=service aun con iss de usuario -> 401",
+			scope:   s2s.ScopeSystemAdmin,
+			allowed: []string{"system_admin"},
+			setHeaders: func(r *http.Request) {
+				r.Header.Set("Authorization", "Bearer "+signTokenWith(t, testNS, []string{"system_admin"},
+					map[string]interface{}{"token_use": s2stoken.TokenUse}))
+			},
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name:    "iss de servicio sin token_use -> 401",
+			scope:   s2s.ScopeSystemAdmin,
+			allowed: []string{"system_admin"},
+			setHeaders: func(r *http.Request) {
+				r.Header.Set("Authorization", "Bearer "+signTokenWith(t, testNS, []string{"system_admin"},
+					map[string]interface{}{"iss": s2stoken.Issuer}))
+			},
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name:    "JWT sin iss -> 401",
+			scope:   s2s.ScopeSystemAdmin,
+			allowed: []string{"system_admin"},
+			setHeaders: func(r *http.Request) {
+				r.Header.Set("Authorization", "Bearer "+signTokenWith(t, testNS, []string{"system_admin"},
+					map[string]interface{}{"iss": nil}))
+			},
+			wantStatus: http.StatusUnauthorized,
 		},
 		{
 			name:    "tenant_admin permitido en regimen B -> 200",

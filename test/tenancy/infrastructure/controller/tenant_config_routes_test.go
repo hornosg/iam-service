@@ -274,6 +274,7 @@ func cfgVerifier() *adapter.JWTServiceAdapter {
 func humanToken(t *testing.T, tenantID uuid.UUID, roles ...string) string {
 	t.Helper()
 	tok := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
+		"iss":     "iam-service", // ACC-E09 T2
 		"user_id": uuid.NewString(), "tenant_id": tenantID.String(), "roles": roles,
 		"namespace": cfgNamespace, "exp": time.Now().Add(time.Hour).Unix(),
 	})

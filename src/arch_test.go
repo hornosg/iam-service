@@ -58,6 +58,10 @@ var prohibiciones = []struct {
 	{"identity", "subscription"},
 	{"identity", "onboarding"},
 	{"access", "subscription"},
+	// ACC-E09 T2 (ADR-006 «Ubicación en la hexagonal de iam»): la emisión del token de servicio
+	// vive en access y no puede apoyarse en identity, ni identity en access.
+	{"identity", "access"},
+	{"access", "identity"},
 }
 
 // moduleRoot devuelve el directorio raíz del módulo Go (patrón del arch_test

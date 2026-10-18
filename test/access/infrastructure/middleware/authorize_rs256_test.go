@@ -91,6 +91,7 @@ func t4Router(t *testing.T, key *rsa.PrivateKey) (*gin.Engine, *map[string]bool)
 func t4SignRS(t *testing.T, k *rsa.PrivateKey, roles []string, withKid bool) string {
 	t.Helper()
 	claims := jwt.MapClaims{
+		"iss":       "iam-service", // ACC-E09 T2: todo token de usuario real lo lleva
 		"user_id":   uuid.New().String(),
 		"tenant_id": uuid.New().String(),
 		"roles":     roles,
@@ -129,6 +130,7 @@ func TestAuthorize_T4_AlgNoneRechazado401(t *testing.T) {
 	router, _ := t4Router(t, authorizeT4Key)
 
 	claims := jwt.MapClaims{
+		"iss":       "iam-service", // ACC-E09 T2: todo token de usuario real lo lleva
 		"user_id":   uuid.New().String(),
 		"tenant_id": uuid.New().String(),
 		"roles":     []string{"tenant_admin"},
@@ -163,6 +165,7 @@ func TestAuthorize_T4_KidConocidoFirmaAjenaRechazada401(t *testing.T) {
 	router, _ := t4Router(t, authorizeT4Key)
 
 	claims := jwt.MapClaims{
+		"iss":       "iam-service", // ACC-E09 T2: todo token de usuario real lo lleva
 		"user_id":   uuid.New().String(),
 		"tenant_id": uuid.New().String(),
 		"roles":     []string{"tenant_admin"},
@@ -204,6 +207,7 @@ func TestAuthorize_T4_ConfusionRSHSRechazada401(t *testing.T) {
 	require.NotNil(t, pubPEM)
 
 	claims := jwt.MapClaims{
+		"iss":       "iam-service", // ACC-E09 T2: todo token de usuario real lo lleva
 		"user_id":   uuid.New().String(),
 		"tenant_id": uuid.New().String(),
 		"roles":     []string{"system_admin"},
@@ -226,6 +230,7 @@ func TestAuthorize_T4_ConfusionRSHSRechazada401(t *testing.T) {
 func TestAuthorize_T6_HS256Rechazado(t *testing.T) {
 	router, _ := t4Router(t, authorizeT4Key)
 	claims := jwt.MapClaims{
+		"iss":       "iam-service", // ACC-E09 T2: todo token de usuario real lo lleva
 		"user_id":   uuid.New().String(),
 		"tenant_id": uuid.New().String(),
 		"roles":     []string{"system_admin"},
