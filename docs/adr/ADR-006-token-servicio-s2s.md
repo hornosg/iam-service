@@ -61,7 +61,7 @@ sentido) y el almacén de `jti` con varias réplicas de iam.
 ### Identificadores de contrato
 
 Los nombres `iss="iam-service/s2s"`, `token_use="service"`, `aud` de la aserción
-`"iam-service/s2s/token"`, el `aud` de iam como receptor y la credencial de Kong son **nombres de
+`"iam-service/s2s/token"`, el `aud` de iam como receptor (`"account-service"`) y la credencial de Kong son **nombres de
 contrato, independientes del nombre del repo**: sobreviven al rename de ACC-E07 (Promoción a plataforma).
 Se definen una sola vez como constantes en el núcleo de go-shared (`s2stoken`) y las importan iam y todos
 los receptores. Cambiarlos es una migración coordinada, no un efecto lateral de renombrar un servicio.
